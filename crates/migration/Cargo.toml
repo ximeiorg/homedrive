@@ -1,9 +1,8 @@
 [package]
-edition      = "2024"
-name         = "migration"
-publish      = false
-rust-version = "1.85.0"
-version      = "0.1.0"
+name = "migration"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
 
 [lib]
 name = "migration"
