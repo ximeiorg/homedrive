@@ -1,0 +1,16 @@
+[package]
+name = "server"
+version = "0.1.0"
+edition = "2024"
+
+[[bin]]
+name = "homedrive"
+path = "src/bin/main.rs"
+
+[dependencies]
+axum = {version = "*"}
+tracing-subscriber = { version = "*"}
+tracing = {version = "*", features = ["log"]}
+tokio = {workspace = true}
+tower-http = { version = "0.6.8", features = ["cors"] }
+store = {path = "../store"}
