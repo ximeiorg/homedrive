@@ -1,9 +1,14 @@
 use rand::RngCore;
 use std::fs;
-use std::path::Path;
 
-/// JWT 密钥文件路径
-const SECRET_FILE: &str = ".jwt_secret";
+/// 获取 JWT 密钥文件路径 (~/.homedrive/.jwt_secret)
+fn get_secret_file_path() -> std::path::PathBuf {
+    let mut path = std::env::home_dir().unwrap_or(std::path::PathBuf::from("."));
+    path.push(".homedrive");
+    fs::create_dir_all(&path).ok();
+    path.push(".jwt_secret");
+    path
+}
 
 /// 加载 JWT 密钥
 /// 如果环境变量设置了 JWT_SECRET，则使用环境变量
@@ -17,9 +22,12 @@ pub fn load_jwt_secret() -> String {
         return secret;
     }
 
-    // 2. 检查密钥文件
-    if Path::new(SECRET_FILE).exists() {
-        match fs::read_to_string(SECRET_FILE) {
+    // 2. 获取密钥文件路径
+    let secret_path = get_secret_file_path();
+
+    // 检查密钥文件
+    if secret_path.exists() {
+        match fs::read_to_string(&secret_path) {
             Ok(secret) if !secret.is_empty() => {
                 tracing::info!("Loaded JWT secret from file");
                 return secret.trim().to_string();
@@ -32,10 +40,10 @@ pub fn load_jwt_secret() -> String {
 
     // 3. 生成新密钥并保存
     let secret = generate_secret();
-    if let Err(e) = fs::write(SECRET_FILE, &secret) {
+    if let Err(e) = fs::write(&secret_path, &secret) {
         tracing::error!("Failed to save JWT secret: {:?}", e);
     } else {
-        tracing::info!("Generated new JWT secret and saved to file");
+        tracing::info!("Generated new JWT secret and saved to {:?}", secret_path);
     }
 
     secret

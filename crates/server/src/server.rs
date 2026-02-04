@@ -1,6 +1,7 @@
 use std::net::SocketAddr;
+use std::sync::Arc;
 
-use axum::{Router, http::StatusCode, response::IntoResponse, http::Method};
+use axum::{http::Method, http::StatusCode, response::IntoResponse, Router};
 use tracing::info;
 use tower_http::cors::{Any, CorsLayer};
 
@@ -24,10 +25,20 @@ pub async fn start() {
     let jwt_secret = load_jwt_secret();
     services::member::init_jwt_secret(jwt_secret);
 
+    // 初始化存储
+    let storage_config = services::StorageConfig {
+        root: "uploads".to_string(),
+        base_url: "/uploads".to_string(),
+    };
+    let storage: Arc<dyn services::StorageService> = Arc::new(services::LocalStorage::new(storage_config));
+
     let conn = store::connect_db("sqlite:homedrive.db?mode=rwc", false)
         .await
         .unwrap();
-    let shared_state = AppState { conn };
+    let shared_state = AppState {
+        conn,
+        storage,
+    };
 
     // CORS 配置
     let cors_layer = CorsLayer::new()

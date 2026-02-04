@@ -33,6 +33,14 @@ pub enum ServiceError {
     #[error("database error: {0}")]
     Database(#[from] store::DbErr),
 
+    /// 存储错误
+    #[error("storage error: {0}")]
+    Storage(String),
+
+    /// 文件不存在
+    #[error("file not found")]
+    FileNotFound,
+
     /// 未知错误
     #[error("unknown error")]
     Unknown,
@@ -44,22 +52,22 @@ impl ServiceError {
     pub fn category(&self) -> ErrorCategory {
         match self {
             // 业务错误可以直接返回给用户
-            Self::MemberNotFound | Self::UsernameExists | Self::InvalidCredentials | Self::InvalidInput(_) => ErrorCategory::Business,
+            Self::MemberNotFound | Self::UsernameExists | Self::InvalidCredentials | Self::InvalidInput(_) | Self::FileNotFound => ErrorCategory::Business,
             // 系统错误需要记录日志
-            Self::Database(_) | Self::Unknown => ErrorCategory::System,
+            Self::Database(_) | Self::Storage(_) | Self::Unknown => ErrorCategory::System,
         }
     }
 
     /// 判断是否为业务错误
     #[inline]
     pub fn is_business_error(&self) -> bool {
-        matches!(self, Self::MemberNotFound | Self::UsernameExists | Self::InvalidCredentials | Self::InvalidInput(_))
+        matches!(self, Self::MemberNotFound | Self::UsernameExists | Self::InvalidCredentials | Self::InvalidInput(_) | Self::FileNotFound)
     }
 
     /// 判断是否为系统错误
     #[inline]
     pub fn is_system_error(&self) -> bool {
-        matches!(self, Self::Database(_) | Self::Unknown)
+        matches!(self, Self::Database(_) | Self::Storage(_) | Self::Unknown)
     }
 }
 

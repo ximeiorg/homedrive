@@ -9,7 +9,7 @@ name = "homedrive"
 path = "src/bin/main.rs"
 
 [dependencies]
-axum = {version = "*", features = ["macros"]}
+axum = {version = "0.8", features = ["macros", "multipart"]}
 tracing-subscriber = { workspace = true }
 tracing = { workspace = true }
 tokio = {workspace = true}

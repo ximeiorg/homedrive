@@ -27,7 +27,7 @@ pub fn routes(state: AppState) -> axum::Router<AppState> {
     // File routes - check hash is public, upload requires auth
     let file_routes = Router::new()
         .route("/check-hash", get(check_file_hash_exists))
-        .route("/upload", post(upload_file));
+        .route("/upload", post(upload_file).layer(axum::middleware::from_fn(auth_middleware)));
 
     // Protected routes - require JWT authentication
     let protected_routes = Router::new()
