@@ -14,14 +14,26 @@ interface MainContentProps {
   viewType: string;
 }
 
-// Demo data
+// Demo data - Using fixed dates to avoid hydration mismatch
 const demoMedia: MediaItem[] = Array.from({ length: 24 }, (_, i) => ({
   id: `media-${i}`,
   thumbnail: `https://picsum.photos/seed/${i + 1}/400/400`,
   type: i % 5 === 0 ? "video" : "image",
   title: `Photo ${i + 1}`,
-  date: new Date(Date.now() - i * 86400000).toLocaleDateString(),
+  date: `2024-01-${String(i + 1).padStart(2, '0')}`,
 }));
+
+// Group media items by date
+const groupMediaByDate = (items: MediaItem[]) => {
+  const groups: Record<string, MediaItem[]> = {};
+  items.forEach((item) => {
+    if (!groups[item.date]) {
+      groups[item.date] = [];
+    }
+    groups[item.date].push(item);
+  });
+  return Object.entries(groups).sort((a, b) => b[0].localeCompare(a[0]));
+};
 
 export function MainContent({ viewType }: MainContentProps) {
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
@@ -60,10 +72,6 @@ export function MainContent({ viewType }: MainContentProps) {
         </div>
         
         <div className="flex items-center gap-2">
-          {/* Mobile: Simple upload button */}
-          <Button isIconOnly color="primary" size="sm" className="md:hidden">
-            <Plus className="w-4 h-4" />
-          </Button>
           
           {/* Desktop: Full controls */}
           <div className="hidden md:flex items-center gap-2">
@@ -74,13 +82,7 @@ export function MainContent({ viewType }: MainContentProps) {
             >
               筛选
             </Button>
-            <Button
-              color="primary"
-              size="sm"
-              startContent={<Upload className="w-4 h-4" />}
-            >
-              上传
-            </Button>
+            
             <ButtonGroup variant="flat" size="sm">
               <Button
                 isIconOnly
@@ -99,6 +101,13 @@ export function MainContent({ viewType }: MainContentProps) {
                 <List className="w-4 h-4" />
               </Button>
             </ButtonGroup>
+            <Button
+              color="primary"
+              size="sm"
+              startContent={<Upload className="w-4 h-4" />}
+            >
+              选择
+            </Button>
           </div>
         </div>
       </div>
@@ -106,6 +115,7 @@ export function MainContent({ viewType }: MainContentProps) {
       {/* Sort - Desktop only */}
       <div className="hidden md:flex items-center justify-end mb-4">
         <Select
+          id="sort-select-desktop"
           label="排序方式"
           placeholder="选择"
           size="sm"
@@ -129,7 +139,7 @@ export function MainContent({ viewType }: MainContentProps) {
               className="aspect-square overflow-hidden group"
             >
               <CardBody className="p-0">
-                <div className="relative w-full h-full">
+                <div className="relative w-full h-full overflow-hidden">
                   <img
                     src={item.thumbnail}
                     alt={item.title}
@@ -154,33 +164,49 @@ export function MainContent({ viewType }: MainContentProps) {
           ))}
         </div>
       ) : (
-        <div className="space-y-2">
-          {demoMedia.map((item) => (
-            <Card
-              key={item.id}
-              isPressable
-              shadow="sm"
-              className="flex-row h-14 md:h-20"
-            >
-              <CardBody className="p-0 flex-shrink-0 w-14 md:w-20">
-                <img
-                  src={item.thumbnail}
-                  alt={item.title}
-                  className="w-full h-full object-cover"
-                />
-              </CardBody>
-              <div className="p-2 md:p-4 flex items-center justify-between flex-1">
-                <div>
-                  <p className="text-sm md:font-medium">{item.title}</p>
-                  <p className="text-xs text-default-500">{item.date}</p>
-                </div>
-                {item.type === "video" && (
-                  <Chip size="sm" variant="flat">
-                    视频
-                  </Chip>
-                )}
+        <div className="space-y-6">
+          {groupMediaByDate(demoMedia).map(([date, items]) => (
+            <div key={date}>
+              {/* Date Header */}
+              <div className="sticky top-0 z-10 bg-default-50/95 backdrop-blur-sm py-2 mb-3">
+                <h3 className="text-sm font-semibold text-default-600">{date}</h3>
               </div>
-            </Card>
+              
+              {/* Media Grid for this date */}
+              <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-2">
+                {items.map((item) => (
+                  <Card
+                    key={item.id}
+                    isPressable
+                    shadow="sm"
+                    className="aspect-square overflow-hidden group"
+                  >
+                    <CardBody className="p-0">
+                      <div className="relative w-full h-full overflow-hidden">
+                        <img
+                          src={item.thumbnail}
+                          alt={item.title}
+                          className="w-full h-full object-cover transition-transform group-hover:scale-105"
+                        />
+                        {item.type === "video" && (
+                          <div className="absolute top-1 right-1">
+                            <Chip
+                              size="sm"
+                              color="default"
+                              variant="flat"
+                              className="bg-black/60 text-white text-xs"
+                            >
+                              视频
+                            </Chip>
+                          </div>
+                        )}
+                        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors" />
+                      </div>
+                    </CardBody>
+                  </Card>
+                ))}
+              </div>
+            </div>
           ))}
         </div>
       )}

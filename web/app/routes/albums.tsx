@@ -1,16 +1,15 @@
 import React, { useState } from "react";
-import { redirect, useSearchParams } from "react-router";
-import type { Route } from "./+types/home";
+import { redirect } from "react-router";
 import { checkMembersEmpty } from "../api";
 import { TopBar } from "../components/TopBar";
 import { Sidebar } from "../components/Sidebar";
 import { MainContent } from "../components/MainContent";
 import { UploadModal } from "../components/UploadModal";
 
-export function meta({}: Route.MetaArgs) {
+export function meta() {
   return [
-    { title: "HomeDrive" },
-    { name: "description", content: "Your personal cloud storage" },
+    { title: "相册 - HomeDrive" },
+    { name: "description", content: "Your photo albums" },
   ];
 }
 
@@ -27,13 +26,9 @@ export async function loader() {
   }
 }
 
-export default function Home() {
-  const [searchParams] = useSearchParams();
+export default function Albums() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isUploadOpen, setIsUploadOpen] = useState(false);
-
-  // Get viewType from URL params or default to "gallery"
-  const viewType = searchParams.get("type") || "gallery";
 
   return (
     <div className="min-h-screen bg-background">
@@ -42,11 +37,11 @@ export default function Home() {
         onUploadClick={() => setIsUploadOpen(true)}
       />
       <Sidebar 
-        selectedKey={viewType} 
+        selectedKey="albums" 
         isMenuOpen={isMenuOpen}
         onMenuClose={() => setIsMenuOpen(false)}
       />
-      <MainContent viewType={viewType} />
+      <MainContent viewType="gallery" />
 
       {/* Upload Modal */}
       <UploadModal isOpen={isUploadOpen} onClose={() => setIsUploadOpen(false)} />
