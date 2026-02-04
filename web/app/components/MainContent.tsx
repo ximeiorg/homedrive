@@ -1,0 +1,206 @@
+import React, { useState } from "react";
+import { Card, CardBody, Button, ButtonGroup, Select, SelectItem, Chip } from "@heroui/react";
+import { Grid3X3, List, Plus, Upload, Filter } from "lucide-react";
+
+interface MediaItem {
+  id: string;
+  thumbnail: string;
+  type: "image" | "video";
+  title: string;
+  date: string;
+}
+
+interface MainContentProps {
+  viewType: string;
+}
+
+// Demo data
+const demoMedia: MediaItem[] = Array.from({ length: 24 }, (_, i) => ({
+  id: `media-${i}`,
+  thumbnail: `https://picsum.photos/seed/${i + 1}/400/400`,
+  type: i % 5 === 0 ? "video" : "image",
+  title: `Photo ${i + 1}`,
+  date: new Date(Date.now() - i * 86400000).toLocaleDateString(),
+}));
+
+export function MainContent({ viewType }: MainContentProps) {
+  const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
+
+  const getTitle = () => {
+    const titles: Record<string, string> = {
+      gallery: "图库",
+      videos: "视频",
+      "live-photos": "实况照片",
+      gifs: "GIF",
+      photos: "照片",
+      shared: "共享",
+      favorites: "收藏",
+      recent: "最近",
+      trash: "回收站",
+    };
+    return titles[viewType] || "媒体库";
+  };
+
+  return (
+    <main
+      className={cn(
+        "overflow-y-auto bg-default-50 transition-all duration-300",
+        "fixed left-0 right-0",
+        "md:left-64",
+        "top-16 bottom-0 md:bottom-0",
+        "p-4 md:p-6",
+        "pb-24 md:pb-6"
+      )}
+    >
+      {/* Header */}
+      <div className="flex items-center justify-between mb-4">
+        <div>
+          <h1 className="text-xl font-bold text-foreground">{getTitle()}</h1>
+          <p className="text-sm text-default-500 mt-1">{demoMedia.length} 个项目</p>
+        </div>
+        
+        <div className="flex items-center gap-2">
+          {/* Mobile: Simple upload button */}
+          <Button isIconOnly color="primary" size="sm" className="md:hidden">
+            <Plus className="w-4 h-4" />
+          </Button>
+          
+          {/* Desktop: Full controls */}
+          <div className="hidden md:flex items-center gap-2">
+            <Button
+              variant="flat"
+              size="sm"
+              startContent={<Filter className="w-4 h-4" />}
+            >
+              筛选
+            </Button>
+            <Button
+              color="primary"
+              size="sm"
+              startContent={<Upload className="w-4 h-4" />}
+            >
+              上传
+            </Button>
+            <ButtonGroup variant="flat" size="sm">
+              <Button
+                isIconOnly
+                aria-label="Grid view"
+                className={viewMode === "grid" ? "bg-primary/20" : ""}
+                onPress={() => setViewMode("grid")}
+              >
+                <Grid3X3 className="w-4 h-4" />
+              </Button>
+              <Button
+                isIconOnly
+                aria-label="List view"
+                className={viewMode === "list" ? "bg-primary/20" : ""}
+                onPress={() => setViewMode("list")}
+              >
+                <List className="w-4 h-4" />
+              </Button>
+            </ButtonGroup>
+          </div>
+        </div>
+      </div>
+
+      {/* Sort - Desktop only */}
+      <div className="hidden md:flex items-center justify-end mb-4">
+        <Select
+          label="排序方式"
+          placeholder="选择"
+          size="sm"
+          className="w-40"
+        >
+          <SelectItem key="date-desc">日期 (新到旧)</SelectItem>
+          <SelectItem key="date-asc">日期 (旧到新)</SelectItem>
+          <SelectItem key="name-asc">名称 (A-Z)</SelectItem>
+          <SelectItem key="name-desc">名称 (Z-A)</SelectItem>
+        </Select>
+      </div>
+
+      {/* Media Grid */}
+      {viewMode === "grid" ? (
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2 md:gap-4">
+          {demoMedia.map((item) => (
+            <Card
+              key={item.id}
+              isPressable
+              shadow="sm"
+              className="aspect-square overflow-hidden group"
+            >
+              <CardBody className="p-0">
+                <div className="relative w-full h-full">
+                  <img
+                    src={item.thumbnail}
+                    alt={item.title}
+                    className="w-full h-full object-cover transition-transform group-hover:scale-105"
+                  />
+                  {item.type === "video" && (
+                    <div className="absolute top-1 right-1 md:top-2 md:right-2">
+                      <Chip
+                        size="sm"
+                        color="default"
+                        variant="flat"
+                        className="bg-black/60 text-white text-xs"
+                      >
+                        视频
+                      </Chip>
+                    </div>
+                  )}
+                  <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors" />
+                </div>
+              </CardBody>
+            </Card>
+          ))}
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {demoMedia.map((item) => (
+            <Card
+              key={item.id}
+              isPressable
+              shadow="sm"
+              className="flex-row h-14 md:h-20"
+            >
+              <CardBody className="p-0 flex-shrink-0 w-14 md:w-20">
+                <img
+                  src={item.thumbnail}
+                  alt={item.title}
+                  className="w-full h-full object-cover"
+                />
+              </CardBody>
+              <div className="p-2 md:p-4 flex items-center justify-between flex-1">
+                <div>
+                  <p className="text-sm md:font-medium">{item.title}</p>
+                  <p className="text-xs text-default-500">{item.date}</p>
+                </div>
+                {item.type === "video" && (
+                  <Chip size="sm" variant="flat">
+                    视频
+                  </Chip>
+                )}
+              </div>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      {/* Empty State */}
+      {demoMedia.length === 0 && (
+        <div className="flex flex-col items-center justify-center h-64 text-center">
+          <div className="w-16 h-16 md:w-24 md:h-24 rounded-full bg-default-100 flex items-center justify-center mb-4">
+            <Upload className="w-8 h-8 md:w-10 md:h-10 text-default-400" />
+          </div>
+          <h3 className="text-base md:text-lg font-medium mb-2">还没有媒体文件</h3>
+          <p className="text-sm text-default-500 mb-4">上传你的第一张照片或视频</p>
+          <Button color="primary" size="sm" startContent={<Plus className="w-4 h-4" />}>
+            选择文件上传
+          </Button>
+        </div>
+      )}
+    </main>
+  );
+}
+
+// Helper for cn
+import { cn } from "@heroui/react";
