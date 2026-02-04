@@ -22,3 +22,4 @@ hyper = { version = "1.8.1", features = ["full"] }
 hyper-util = { version = "0.1.20", features = ["client-legacy"] }
 serde = {workspace = true}
 thiserror = "2.0.18"
+jsonwebtoken = "10.3.0"

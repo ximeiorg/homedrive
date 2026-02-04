@@ -11,6 +11,9 @@ pub enum ServiceError {
     #[error("username already exists")]
     UsernameExists,
 
+    #[error("invalid credentials")]
+    InvalidCredentials,
+
     #[error("invalid input: {0}")]
     InvalidInput(String),
 

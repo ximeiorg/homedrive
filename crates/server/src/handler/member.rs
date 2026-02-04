@@ -4,8 +4,8 @@ use axum::{
     extract::{Path, Query, State},
 };
 use schema::member::{
-    CreateMemberRequest, ListMembersQuery, MemberListResponse, MemberResponse, UpdateAvatarRequest,
-    UpdateMemberRequest, UpdatePasswordRequest,
+    CreateMemberRequest, ListMembersQuery, LoginRequest, LoginResponse, MemberListResponse,
+    MemberResponse, UpdateAvatarRequest, UpdateMemberRequest, UpdatePasswordRequest,
 };
 
 /// 创建新成员
@@ -102,4 +102,13 @@ pub async fn update_member_password(
     let member =
         services::MemberService::update_password(&state.conn, id, payload.new_password).await?;
     Ok(Json(member))
+}
+
+/// 登录
+pub async fn login(
+    State(state): State<AppState>,
+    axum::Json(payload): axum::Json<LoginRequest>,
+) -> crate::error::Result<Json<LoginResponse>> {
+    let login_response = services::MemberService::login(&state.conn, payload).await?;
+    Ok(Json(login_response))
 }

@@ -11,6 +11,9 @@ pub enum AppError {
     #[error("member already exists")]
     MemberAlreadyExists,
 
+    #[error("invalid credentials")]
+    InvalidCredentials,
+
     #[error("invalid input: {0}")]
     InvalidInput(String),
 
@@ -27,7 +30,6 @@ pub type Result<T> = std::result::Result<T, AppError>;
 
 impl IntoResponse for AppError {
     fn into_response(self) -> axum::response::Response {
-        
         let (status, message, should_log) = match &self {
             // 业务逻辑错误 - 可以安全地返回给用户
             AppError::MemberNotFound => {
@@ -36,6 +38,11 @@ impl IntoResponse for AppError {
             AppError::MemberAlreadyExists => (
                 StatusCode::CONFLICT,
                 "member already exists".to_owned(),
+                false,
+            ),
+            AppError::InvalidCredentials => (
+                StatusCode::UNAUTHORIZED,
+                "invalid credentials".to_owned(),
                 false,
             ),
             AppError::InvalidInput(msg) => (StatusCode::BAD_REQUEST, msg.clone(), false),
@@ -51,7 +58,13 @@ impl IntoResponse for AppError {
                 "internal server error".to_owned(),
                 true,
             ),
-            AppError::ServiceError(_) => unreachable!("ServiceError handled above"),
+            // 处理 ServiceError 中的特定错误
+            AppError::ServiceError(services::ServiceError::InvalidCredentials) => (
+                StatusCode::UNAUTHORIZED,
+                "invalid credentials".to_owned(),
+                false,
+            ),
+            AppError::ServiceError(_) => unreachable!(),
         };
 
         // 记录内部错误的详细信息

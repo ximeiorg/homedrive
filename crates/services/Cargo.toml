@@ -10,3 +10,7 @@ schema = { path = "../schema" }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
+jsonwebtoken = "10.3.0"
+chrono = { version = "0.4", features = ["serde"] }
+serde = { version = "1.0", features = ["derive"] }
+bcrypt = "0.15"

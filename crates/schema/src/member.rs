@@ -55,3 +55,23 @@ pub struct MemberListResponse {
     pub page: u64,
     pub page_size: u64,
 }
+
+/// 登录请求
+#[derive(Debug, Serialize, Deserialize)]
+pub struct LoginRequest {
+    pub username: String,
+    pub password: String,
+}
+
+/// 登录响应
+#[derive(Debug, Serialize, Deserialize)]
+pub struct LoginResponse {
+    pub token: String,
+    pub member: MemberResponse,
+}
+
+/// 刷新Token请求
+#[derive(Debug, Serialize, Deserialize)]
+pub struct RefreshTokenRequest {
+    pub refresh_token: String,
+}

@@ -1,7 +1,10 @@
 use crate::error::Result;
+use chrono::{Duration, Utc};
 use schema::member::{
-    CreateMemberRequest, MemberListResponse, MemberResponse, UpdateMemberRequest,
+    CreateMemberRequest, LoginRequest, LoginResponse, MemberListResponse, MemberResponse,
+    UpdateMemberRequest,
 };
+use serde::{Deserialize, Serialize};
 use store::DatabaseConnection;
 
 pub struct MemberService;
@@ -12,9 +15,15 @@ impl MemberService {
         db: &DatabaseConnection,
         data: CreateMemberRequest,
     ) -> Result<MemberResponse> {
+        // 对密码进行 bcrypt 哈希
+        let hashed_password = bcrypt::hash(&data.password, bcrypt::DEFAULT_COST).map_err(|e| {
+            tracing::error!("Failed to hash password: {:?}", e);
+            crate::error::ServiceError::Unknown
+        })?;
+
         let create_data = store::member::mutation::CreateMember {
             username: data.username,
-            password: data.password,
+            password: hashed_password,
             avatar: data.avatar,
             storage_tag: data.storage_tag,
         };
@@ -156,8 +165,14 @@ impl MemberService {
         id: i64,
         new_password: String,
     ) -> Result<MemberResponse> {
+        //对新密码进行 bcrypt 哈希
+        let hashed_password = bcrypt::hash(&new_password, bcrypt::DEFAULT_COST).map_err(|e| {
+            tracing::error!("Failed to hash password: {:?}", e);
+            crate::error::ServiceError::Unknown
+        })?;
+
         let member =
-            store::member::mutation::Mutation::update_password(db, id, new_password).await?;
+            store::member::mutation::Mutation::update_password(db, id, hashed_password).await?;
 
         Ok(MemberResponse {
             id: member.id,
@@ -167,4 +182,65 @@ impl MemberService {
             created_at: member.created_at,
         })
     }
+
+    /// 登录验证
+    pub async fn login(
+        db: &DatabaseConnection,
+        data: LoginRequest,
+    ) -> Result<LoginResponse> {
+        // 根据用户名查找成员
+        let member = store::member::query::Query::find_by_username(db, &data.username)
+            .await?
+            .ok_or(crate::error::ServiceError::InvalidCredentials)?;
+
+        // 使用 bcrypt 验证密码
+        let password_matches = bcrypt::verify(&data.password, &member.password).map_err(|e| {
+            tracing::error!("Failed to verify password: {:?}", e);
+            crate::error::ServiceError::InvalidCredentials
+        })?;
+
+        if !password_matches {
+            return Err(crate::error::ServiceError::InvalidCredentials);
+        }
+
+        // 生成 token
+        let token = generate_token(&member);
+
+        Ok(LoginResponse {
+            token,
+            member: MemberResponse {
+                id: member.id,
+                username: member.username,
+                avatar: member.avatar,
+                storage_tag: member.storage_tag,
+                created_at: member.created_at,
+            },
+        })
+    }
+}
+
+/// JWT Claims
+#[derive(Debug, Serialize, Deserialize)]
+struct Claims {
+    sub: i64,
+    aud: Option<String>,
+    exp: u64,
+    iat: u64,
+}
+
+/// 生成 JWT token
+fn generate_token(member: &store::entity::members::Model) -> String {
+    let secret = std::env::var("JWT_SECRET").unwrap_or_else(|_| "default-secret-key".to_string());
+    let header = jsonwebtoken::Header::default();
+    let now = chrono::Utc::now();
+    let expiration = now + chrono::Duration::hours(24);
+
+    let claims = Claims {
+        sub: member.id,
+        aud: Some("homedrive".to_string()),
+        exp: expiration.timestamp() as u64,
+        iat: now.timestamp() as u64,
+    };
+
+    jsonwebtoken::encode(&header, &claims, &jsonwebtoken::EncodingKey::from_secret(secret.as_bytes())).unwrap_or_default()
 }
