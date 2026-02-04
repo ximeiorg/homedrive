@@ -2,8 +2,8 @@ use crate::error::Result;
 use chrono::{Duration, Utc};
 use once_cell::sync::OnceCell;
 use schema::member::{
-    CreateMemberRequest, LoginRequest, LoginResponse, MemberListResponse, MemberResponse,
-    UpdateMemberRequest,
+    CreateMemberRequest, InitAdminRequest, InitAdminResponse, IsEmptyResponse, LoginRequest,
+    LoginResponse, MemberListResponse, MemberResponse, UpdateMemberRequest,
 };
 use serde::{Deserialize, Serialize};
 use store::DatabaseConnection;
@@ -229,6 +229,91 @@ impl MemberService {
                 storage_tag: member.storage_tag,
                 created_at: member.created_at,
             },
+        })
+    }
+
+    /// 检查 member 表是否为空
+    pub async fn is_empty(db: &DatabaseConnection) -> Result<IsEmptyResponse> {
+        let is_empty = store::member::query::Query::is_empty(db).await?;
+        Ok(IsEmptyResponse { is_empty })
+    }
+
+    /// 初始化管理员（仅当 member 表为空时有效）
+    pub async fn init_admin(
+        db: &DatabaseConnection,
+        data: InitAdminRequest,
+    ) -> Result<InitAdminResponse> {
+        // 检查是否已经有成员
+        let is_empty = store::member::query::Query::is_empty(db).await?;
+        if !is_empty {
+            return Ok(InitAdminResponse {
+                success: false,
+                message: "Admin user already exists".to_string(),
+                member: None,
+            });
+        }
+
+        // 验证输入
+        if data.username.is_empty() {
+            return Ok(InitAdminResponse {
+                success: false,
+                message: "Username cannot be empty".to_string(),
+                member: None,
+            });
+        }
+        if data.password.len() < 6 {
+            return Ok(InitAdminResponse {
+                success: false,
+                message: "Password must be at least 6 characters".to_string(),
+                member: None,
+            });
+        }
+        if data.storage_tag.is_empty() {
+            return Ok(InitAdminResponse {
+                success: false,
+                message: "Storage tag cannot be empty".to_string(),
+                member: None,
+            });
+        }
+        if data.storage_tag.len() > 50 {
+            return Ok(InitAdminResponse {
+                success: false,
+                message: "Storage tag must be less than 50 characters".to_string(),
+                member: None,
+            });
+        }
+        // 检查 storage_tag 是否已存在
+        if store::member::query::Query::storage_tag_exists(db, &data.storage_tag).await? {
+            return Ok(InitAdminResponse {
+                success: false,
+                message: "Storage tag already exists".to_string(),
+                member: None,
+            });
+        }
+
+        // 使用用户提供的 storage_tag
+        let storage_tag = data.storage_tag;
+
+        // 创建管理员
+        let create_data = store::member::mutation::CreateMember {
+            username: data.username,
+            password: data.password, // 会在 create_member 中进行哈希
+            avatar: None,
+            storage_tag,
+        };
+
+        let member = store::member::mutation::Mutation::create(db, create_data).await?;
+
+        Ok(InitAdminResponse {
+            success: true,
+            message: "Admin user created successfully".to_string(),
+            member: Some(MemberResponse {
+                id: member.id,
+                username: member.username,
+                avatar: member.avatar,
+                storage_tag: member.storage_tag,
+                created_at: member.created_at,
+            }),
         })
     }
 }

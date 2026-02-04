@@ -75,3 +75,25 @@ pub struct LoginResponse {
 pub struct RefreshTokenRequest {
     pub refresh_token: String,
 }
+
+/// 检查 member 表是否为空响应
+#[derive(Debug, Serialize, Deserialize)]
+pub struct IsEmptyResponse {
+    pub is_empty: bool,
+}
+
+/// 初始化管理员请求
+#[derive(Debug, Serialize, Deserialize)]
+pub struct InitAdminRequest {
+    pub username: String,
+    pub password: String,
+    pub storage_tag: String,
+}
+
+/// 初始化管理员响应
+#[derive(Debug, Serialize, Deserialize)]
+pub struct InitAdminResponse {
+    pub success: bool,
+    pub message: String,
+    pub member: Option<MemberResponse>,
+}

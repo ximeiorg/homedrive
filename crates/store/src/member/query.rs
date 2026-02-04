@@ -101,4 +101,15 @@ impl Query {
 
         Ok(count > 0)
     }
+
+    /// 检查 member 表是否为空（没有成员）
+    pub async fn is_empty(db: &DatabaseConnection) -> Result<bool, sea_orm::DbErr> {
+        let count = members::Entity::find().count(db).await?;
+        Ok(count == 0)
+    }
+
+    /// 获取 member 总数
+    pub async fn count_all(db: &DatabaseConnection) -> Result<u64, sea_orm::DbErr> {
+        members::Entity::find().count(db).await
+    }
 }

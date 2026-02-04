@@ -1,0 +1,23 @@
+info:
+  name: init_admin
+  type: http
+  seq: 1
+
+http:
+  method: POST
+  url: "{{host}}/api/members/init"
+  body:
+    type: json
+    data: |-
+      {
+        "username":"admin",
+        "password":"123456",
+        "storage_tag":"admin"
+      }
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

@@ -4,8 +4,9 @@ use axum::{
     extract::{Path, Query, State},
 };
 use schema::member::{
-    CreateMemberRequest, ListMembersQuery, LoginRequest, LoginResponse, MemberListResponse,
-    MemberResponse, UpdateAvatarRequest, UpdateMemberRequest, UpdatePasswordRequest,
+    CreateMemberRequest, InitAdminRequest, InitAdminResponse, ListMembersQuery, LoginRequest,
+    LoginResponse, MemberListResponse, MemberResponse, UpdateAvatarRequest, UpdateMemberRequest,
+    UpdatePasswordRequest,
 };
 
 /// 创建新成员
@@ -111,4 +112,21 @@ pub async fn login(
 ) -> crate::error::Result<Json<LoginResponse>> {
     let login_response = services::MemberService::login(&state.conn, payload).await?;
     Ok(Json(login_response))
+}
+
+/// 检查 member 表是否为空（无需认证）
+pub async fn check_members_empty(
+    State(state): State<AppState>,
+) -> crate::error::Result<Json<schema::member::IsEmptyResponse>> {
+    let response = services::MemberService::is_empty(&state.conn).await?;
+    Ok(Json(response))
+}
+
+/// 初始化管理员（无需认证，仅当 member 表为空时有效）
+pub async fn init_admin(
+    State(state): State<AppState>,
+    axum::Json(payload): axum::Json<InitAdminRequest>,
+) -> crate::error::Result<Json<InitAdminResponse>> {
+    let response = services::MemberService::init_admin(&state.conn, payload).await?;
+    Ok(Json(response))
 }

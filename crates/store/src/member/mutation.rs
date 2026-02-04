@@ -34,6 +34,7 @@ impl Mutation {
             password: Set(data.password),
             avatar: Set(data.avatar),
             storage_tag: Set(data.storage_tag),
+            created_at: Set(chrono::Utc::now()),
             ..Default::default()
         };
 
