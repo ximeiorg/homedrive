@@ -27,12 +27,7 @@ pub type Result<T> = std::result::Result<T, AppError>;
 
 impl IntoResponse for AppError {
     fn into_response(self) -> axum::response::Response {
-        match self {
-            // 服务层错误 - 委托给 ServiceError 处理
-            AppError::ServiceError(service_err) => return service_err.into_response(),
-            _ => {}
-        }
-
+        
         let (status, message, should_log) = match &self {
             // 业务逻辑错误 - 可以安全地返回给用户
             AppError::MemberNotFound => {
