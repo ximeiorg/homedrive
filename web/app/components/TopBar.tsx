@@ -1,12 +1,13 @@
 import React from "react";
 import { Avatar, Input, Dropdown, DropdownTrigger, DropdownMenu, DropdownItem, Button } from "@heroui/react";
-import { Search, Settings, LogOut, User, Menu } from "lucide-react";
+import { Search, Settings, LogOut, User, Menu, Upload } from "lucide-react";
 
 interface TopBarProps {
   onMenuClick?: () => void;
+  onUploadClick?: () => void;
 }
 
-export function TopBar({ onMenuClick }: TopBarProps) {
+export function TopBar({ onMenuClick, onUploadClick }: TopBarProps) {
   return (
     <header className="fixed top-0 left-0 right-0 h-16 bg-background/80 backdrop-blur-md border-b border-divider z-50 px-4 flex items-center justify-between">
       {/* Left: Logo & Menu Button */}
@@ -41,30 +42,56 @@ export function TopBar({ onMenuClick }: TopBarProps) {
         />
       </div>
 
-      {/* Right: User Profile */}
-      <Dropdown placement="bottom-end">
-        <DropdownTrigger>
-          <Button variant="light" className="p-2 rounded-full">
-            <Avatar
-              isBordered
-              color="primary"
-              src="https://i.pravatar.cc/150?u=a042581f4e29026024d"
-              size="sm"
-            />
-          </Button>
-        </DropdownTrigger>
-        <DropdownMenu aria-label="User menu" variant="flat">
-          <DropdownItem key="profile" startContent={<User className="w-4 h-4" />}>
-            个人信息
-          </DropdownItem>
-          <DropdownItem key="settings" startContent={<Settings className="w-4 h-4" />}>
-            设置
-          </DropdownItem>
-          <DropdownItem key="logout" color="danger" startContent={<LogOut className="w-4 h-4" />}>
-            退出登录
-          </DropdownItem>
-        </DropdownMenu>
-      </Dropdown>
+      {/* Right: Actions */}
+      <div className="flex items-center gap-2">
+        {/* Upload Button */}
+        <Button
+          variant="flat"
+          color="primary"
+          startContent={<Upload className="w-4 h-4" />}
+          onPress={onUploadClick}
+          className="hidden sm:flex"
+        >
+          上传
+        </Button>
+        
+        {/* Mobile Upload Button */}
+        <Button
+          isIconOnly
+          variant="flat"
+          color="primary"
+          onPress={onUploadClick}
+          className="sm:hidden"
+          aria-label="Upload"
+        >
+          <Upload className="w-5 h-5" />
+        </Button>
+
+        {/* User Profile */}
+        <Dropdown placement="bottom-end">
+          <DropdownTrigger>
+            <Button variant="light" className="p-2 rounded-full">
+              <Avatar
+                isBordered
+                color="primary"
+                src="https://i.pravatar.cc/150?u=a042581f4e29026024d"
+                size="sm"
+              />
+            </Button>
+          </DropdownTrigger>
+          <DropdownMenu aria-label="User menu" variant="flat">
+            <DropdownItem key="profile" startContent={<User className="w-4 h-4" />}>
+              个人信息
+            </DropdownItem>
+            <DropdownItem key="settings" startContent={<Settings className="w-4 h-4" />}>
+              设置
+            </DropdownItem>
+            <DropdownItem key="logout" color="danger" startContent={<LogOut className="w-4 h-4" />}>
+              退出登录
+            </DropdownItem>
+          </DropdownMenu>
+        </Dropdown>
+      </div>
     </header>
   );
 }

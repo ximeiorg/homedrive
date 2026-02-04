@@ -1,5 +1,6 @@
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:2300";
 const API_BASE = `${API_BASE_URL}/api/members`;
+const FILES_API = `${API_BASE_URL}/api/files`;
 
 export interface IsEmptyResponse {
   is_empty: boolean;
@@ -74,6 +75,15 @@ export async function login(data: LoginRequest): Promise<LoginResponse> {
   });
   if (!response.ok) {
     throw new Error("Login failed");
+  }
+  return response.json();
+}
+
+// 检查文件 hash 是否存在
+export async function checkFileHashExists(hash: string): Promise<{ exists: boolean }> {
+  const response = await fetch(`${FILES_API}/check-hash?hash=${encodeURIComponent(hash)}`);
+  if (!response.ok) {
+    throw new Error("Failed to check file hash");
   }
   return response.json();
 }

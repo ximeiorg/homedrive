@@ -5,6 +5,7 @@ import { checkMembersEmpty } from "../api";
 import { TopBar } from "../components/TopBar";
 import { Sidebar } from "../components/Sidebar";
 import { MainContent } from "../components/MainContent";
+import { UploadModal } from "../components/UploadModal";
 import { Modal, ModalContent, ModalHeader, ModalBody, ModalFooter, Button } from "@heroui/react";
 import { Image, Video, Share2, Radio, Layers, Heart, Clock, Trash2 } from "lucide-react";
 
@@ -44,10 +45,14 @@ const mobileMenuItems = [
 export default function Home() {
   const [selectedView, setSelectedView] = useState("gallery");
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [isUploadOpen, setIsUploadOpen] = useState(false);
 
   return (
     <div className="min-h-screen bg-background">
-      <TopBar onMenuClick={() => setIsMenuOpen(true)} />
+      <TopBar
+        onMenuClick={() => setIsMenuOpen(true)}
+        onUploadClick={() => setIsUploadOpen(true)}
+      />
       <Sidebar selectedKey={selectedView} onSelect={setSelectedView} />
       <MainContent viewType={selectedView} />
 
@@ -96,6 +101,9 @@ export default function Home() {
           </ModalFooter>
         </ModalContent>
       </Modal>
+
+      {/* Upload Modal */}
+      <UploadModal isOpen={isUploadOpen} onClose={() => setIsUploadOpen(false)} />
     </div>
   );
 }

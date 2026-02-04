@@ -19,4 +19,19 @@ declare module 'lucide-react' {
   export const Plus: React.ComponentType<any>;
   export const Upload: React.ComponentType<any>;
   export const Filter: React.ComponentType<any>;
+  export const X: React.ComponentType<any>;
+  export const Check: React.ComponentType<any>;
+  export const AlertCircle: React.ComponentType<any>;
+  export const FileImage: React.ComponentType<any>;
+  export const FileVideo: React.ComponentType<any>;
+}
+
+// Hash-WASM type declarations
+declare module 'hash-wasm' {
+  export interface IHasher {
+    update(input: Uint8Array | string): IHasher;
+    digest(): string;
+  }
+  export function createXXHash3(): Promise<IHasher>;
+  export function createXXHash2(bits?: number): Promise<IHasher>;
 }

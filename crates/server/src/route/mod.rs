@@ -11,15 +11,25 @@ use crate::handler::member::{
     update_member_password,
 };
 
+use crate::handler::file::{
+    check_file_hash_exists,
+    upload_file,
+};
+
 pub fn routes(state: AppState) -> axum::Router<AppState> {
-    // 公开路由 - 无需认证
+    // Public routes - no authentication required
     let public_routes = Router::new()
         .route("/login", post(login))
         .route("/username/{username}/exists", get(check_username_exists))
         .route("/empty", get(check_members_empty))
         .route("/init", post(init_admin));
 
-    // 受保护路由 - 需要 JWT 认证
+    // File routes - check hash is public, upload requires auth
+    let file_routes = Router::new()
+        .route("/check-hash", get(check_file_hash_exists))
+        .route("/upload", post(upload_file));
+
+    // Protected routes - require JWT authentication
     let protected_routes = Router::new()
         .route("/", post(create_member))
         .route("/", get(list_members))
@@ -33,5 +43,6 @@ pub fn routes(state: AppState) -> axum::Router<AppState> {
 
     Router::new()
         .nest("/members", public_routes.merge(protected_routes))
+        .nest("/files", file_routes)
         .with_state(state)
 }
