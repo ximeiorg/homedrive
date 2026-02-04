@@ -6,3 +6,5 @@ resolver = "2"
 tokio = { version = "1", features = ["rt-multi-thread","fs","macros"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "*" }
+tracing = "0.1.44"
+tracing-subscriber = {version = "0.3.22", features = ["json"]}

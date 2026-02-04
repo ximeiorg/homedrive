@@ -9,9 +9,16 @@ name = "homedrive"
 path = "src/bin/main.rs"
 
 [dependencies]
-axum = {version = "*"}
-tracing-subscriber = { version = "*"}
-tracing = {version = "*", features = ["log"]}
+axum = {version = "*", features = ["macros"]}
+tracing-subscriber = { workspace = true }
+tracing = { workspace = true }
 tokio = {workspace = true}
 tower-http = { version = "0.6.8", features = ["cors"] }
 store = {path = "../store"}
+services = {path = "../services"}
+schema = {path = "../schema"}
+serde_json = "1.0"
+hyper = { version = "1.8.1", features = ["full"] }
+hyper-util = { version = "0.1.20", features = ["client-legacy"] }
+serde = {workspace = true}
+thiserror = "2.0.18"
