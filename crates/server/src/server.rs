@@ -3,7 +3,7 @@ use std::net::SocketAddr;
 use axum::{Router, http::StatusCode, response::IntoResponse};
 use tracing::info;
 
-use crate::{route::routes, state::AppState};
+use crate::{route::routes, secret::load_jwt_secret, state::AppState};
 
 pub async fn serve(app: Router, port: u16) {
     let addr = SocketAddr::from(([0, 0, 0, 0], port));
@@ -19,6 +19,10 @@ pub async fn serve(app: Router, port: u16) {
 }
 
 pub async fn start() {
+    // 初始化 JWT 密钥
+    let jwt_secret = load_jwt_secret();
+    services::member::init_jwt_secret(jwt_secret);
+
     let conn = store::connect_db("sqlite:homedrive.db?mode=rwc", true)
         .await
         .unwrap();

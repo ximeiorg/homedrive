@@ -22,4 +22,3 @@ pub enum ServiceError {
 }
 
 pub type Result<T> = std::result::Result<T, ServiceError>;
-

@@ -1,9 +1,5 @@
 use crate::error::AppError;
-use axum::{
-    extract::Request,
-    middleware::Next,
-    response::Response,
-};
+use axum::{extract::Request, middleware::Next, response::Response};
 use serde::{Deserialize, Serialize};
 
 /// JWT Claims
@@ -38,7 +34,8 @@ pub async fn auth_middleware(req: Request, next: Next) -> Result<Response, AppEr
         .and_then(|auth_header| extract_token_from_header(auth_header))
         .ok_or(AppError::InvalidCredentials)?;
 
-    let secret = std::env::var("JWT_SECRET").unwrap_or_else(|_| "default-secret-key".to_string());
+    // 使用 services 的全局密钥
+    let secret = services::get_jwt_secret();
     let decoding_key = jsonwebtoken::DecodingKey::from_secret(secret.as_bytes());
 
     let validation = jsonwebtoken::Validation::default();

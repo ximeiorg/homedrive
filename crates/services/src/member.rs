@@ -1,11 +1,28 @@
 use crate::error::Result;
 use chrono::{Duration, Utc};
+use once_cell::sync::OnceCell;
 use schema::member::{
     CreateMemberRequest, LoginRequest, LoginResponse, MemberListResponse, MemberResponse,
     UpdateMemberRequest,
 };
 use serde::{Deserialize, Serialize};
 use store::DatabaseConnection;
+
+/// 全局 JWT 密钥
+static JWT_SECRET: OnceCell<String> = OnceCell::new();
+
+/// 初始化 JWT 密钥（在服务启动时调用）
+pub fn init_jwt_secret(secret: String) {
+    JWT_SECRET.set(secret).ok();
+}
+
+/// 获取 JWT 密钥
+pub fn get_jwt_secret() -> String {
+    JWT_SECRET.get().cloned().unwrap_or_else(|| {
+        // 默认密钥，仅用于开发环境
+        "default-secret-key-for-development".to_string()
+    })
+}
 
 pub struct MemberService;
 
@@ -184,10 +201,7 @@ impl MemberService {
     }
 
     /// 登录验证
-    pub async fn login(
-        db: &DatabaseConnection,
-        data: LoginRequest,
-    ) -> Result<LoginResponse> {
+    pub async fn login(db: &DatabaseConnection, data: LoginRequest) -> Result<LoginResponse> {
         // 根据用户名查找成员
         let member = store::member::query::Query::find_by_username(db, &data.username)
             .await?
@@ -230,7 +244,7 @@ struct Claims {
 
 /// 生成 JWT token
 fn generate_token(member: &store::entity::members::Model) -> String {
-    let secret = std::env::var("JWT_SECRET").unwrap_or_else(|_| "default-secret-key".to_string());
+    let secret = get_jwt_secret();
     let header = jsonwebtoken::Header::default();
     let now = chrono::Utc::now();
     let expiration = now + chrono::Duration::hours(24);
@@ -242,5 +256,10 @@ fn generate_token(member: &store::entity::members::Model) -> String {
         iat: now.timestamp() as u64,
     };
 
-    jsonwebtoken::encode(&header, &claims, &jsonwebtoken::EncodingKey::from_secret(secret.as_bytes())).unwrap_or_default()
+    jsonwebtoken::encode(
+        &header,
+        &claims,
+        &jsonwebtoken::EncodingKey::from_secret(secret.as_bytes()),
+    )
+    .unwrap_or_default()
 }
