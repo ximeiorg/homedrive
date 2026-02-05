@@ -15,7 +15,7 @@ fn get_secret_file_path() -> std::path::PathBuf {
 /// 否则从文件读取，如果文件不存在则生成新密钥并保存
 pub fn load_jwt_secret() -> String {
     // 1. 首先检查环境变量
-    if let Ok(secret) = std::env::var("JWT_SECRET")
+    if let Ok(secret) = std::env::var("HOMEDRIVE_JWT_SECRET")
         && !secret.is_empty()
     {
         tracing::info!("Using JWT secret from environment variable");
@@ -39,7 +39,7 @@ pub fn load_jwt_secret() -> String {
     }
 
     // 3. 生成新密钥并保存
-    let secret = generate_secret();
+    let secret = generate_jwt_secret();
     if let Err(e) = fs::write(&secret_path, &secret) {
         tracing::error!("Failed to save JWT secret: {:?}", e);
     } else {
@@ -50,7 +50,7 @@ pub fn load_jwt_secret() -> String {
 }
 
 /// 生成随机密钥（32字节 base64编码）
-fn generate_secret() -> String {
+pub fn generate_jwt_secret() -> String {
     let mut rng = rand::thread_rng();
     let mut key = [0u8; 32];
     rng.fill_bytes(&mut key);

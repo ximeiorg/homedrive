@@ -13,6 +13,7 @@ use crate::handler::member::{
 
 use crate::handler::file::{
     check_file_hash_exists,
+    serve_file,
     upload_file,
 };
 
@@ -24,10 +25,11 @@ pub fn routes(state: AppState) -> axum::Router<AppState> {
         .route("/empty", get(check_members_empty))
         .route("/init", post(init_admin));
 
-    // File routes - check hash is public, upload requires auth
+    // File routes - check hash is public, upload and serve require auth
     let file_routes = Router::new()
         .route("/check-hash", get(check_file_hash_exists))
-        .route("/upload", post(upload_file).layer(axum::middleware::from_fn(auth_middleware)));
+        .route("/upload", post(upload_file).layer(axum::middleware::from_fn(auth_middleware)))
+        .route("/:storage_tag/*path", get(serve_file).layer(axum::middleware::from_fn(auth_middleware)));
 
     // Protected routes - require JWT authentication
     let protected_routes = Router::new()

@@ -20,8 +20,12 @@ schema = {path = "../schema"}
 serde_json = "1.0"
 hyper = { version = "1.8.1", features = ["full"] }
 hyper-util = { version = "0.1.20", features = ["client-legacy"] }
-serde = {workspace = true}
+serde = {workspace = true, features = ["derive"]}
 thiserror = "2.0.18"
 jsonwebtoken = "10.3.0"
 rand = "0.8"
 base64 = "0.22"
+dotenvy = "0.15"
+config = "0.14"
+mime_guess = "2"
+tokio-util = { version = "0.7", features = ["io"] }

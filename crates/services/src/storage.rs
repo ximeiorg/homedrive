@@ -28,8 +28,6 @@ pub trait StorageService: Send + Sync {
 pub struct StorageConfig {
     /// 存储根目录
     pub root: String,
-    /// 基础 URL（用于生成文件访问链接）
-    pub base_url: String,
 }
 
 /// 本地文件系统存储实现
@@ -105,9 +103,9 @@ impl StorageService for LocalStorage {
             .map_err(|e| crate::ServiceError::Storage(e.to_string()))
     }
 
-    async fn url(&self, key: &str) -> Result<String, crate::ServiceError> {
+    async fn url(&self, _key: &str) -> Result<String, crate::ServiceError> {
         // 生成可直接访问的 URL
-        Ok(format!("{}/{}", self.config.base_url.trim_end_matches('/'), key))
+        unimplemented!("LocalStorage does not support generating URLs")
     }
 
     async fn size(&self, key: &str) -> Result<u64, crate::ServiceError> {

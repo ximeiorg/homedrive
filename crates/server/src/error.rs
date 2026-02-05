@@ -15,6 +15,12 @@ pub enum AppError {
     #[error("invalid credentials")]
     InvalidCredentials,
 
+    #[error("forbidden")]
+    Forbidden,
+
+    #[error("not found")]
+    NotFound,
+
     #[error("invalid input: {0}")]
     InvalidInput(String),
 
@@ -36,6 +42,8 @@ impl AppError {
             Self::MemberNotFound => "member not found".into(),
             Self::MemberAlreadyExists => "member already exists".into(),
             Self::InvalidCredentials => "invalid credentials".into(),
+            Self::Forbidden => "forbidden".into(),
+            Self::NotFound => "not found".into(),
             Self::InvalidInput(msg) => msg.clone(),
             // 系统错误只返回通用消息
             Self::DatabaseError | Self::Unknown | Self::ServiceError(_) => "internal server error".into(),
@@ -46,7 +54,7 @@ impl AppError {
     pub fn should_log(&self) -> bool {
         match self {
             // 业务错误通常不需要记录 error 级别日志
-            Self::MemberNotFound | Self::MemberAlreadyExists | Self::InvalidCredentials => false,
+            Self::MemberNotFound | Self::MemberAlreadyExists | Self::InvalidCredentials | Self::Forbidden | Self::NotFound => false,
             // 系统错误需要记录
             Self::InvalidInput(_) => false, // 也可以设为 true，取决于需求
             Self::DatabaseError | Self::Unknown | Self::ServiceError(_) => true,
@@ -72,6 +80,8 @@ impl IntoResponse for AppError {
             Self::MemberNotFound => StatusCode::NOT_FOUND,
             Self::MemberAlreadyExists => StatusCode::CONFLICT,
             Self::InvalidCredentials => StatusCode::UNAUTHORIZED,
+            Self::Forbidden => StatusCode::FORBIDDEN,
+            Self::NotFound => StatusCode::NOT_FOUND,
             Self::InvalidInput(_) => StatusCode::BAD_REQUEST,
             
             // 系统内部错误 - 返回 500

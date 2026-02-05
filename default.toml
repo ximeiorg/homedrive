@@ -1,0 +1,14 @@
+[server]
+port = 2300
+host = "0.0.0.0"
+cors_origin = "*"
+
+[storage]
+volume = "Homedrive"
+
+[jwt]
+secret = "WRITE_YOUR_SECRET_HERE"
+expiry_hours = 24
+
+[database]
+url = "sqlite://homedrive.db?mode=rwc"

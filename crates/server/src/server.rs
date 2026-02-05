@@ -5,7 +5,7 @@ use axum::{http::Method, http::StatusCode, response::IntoResponse, Router};
 use tracing::info;
 use tower_http::cors::{Any, CorsLayer};
 
-use crate::{route::routes, secret::load_jwt_secret, state::AppState};
+use crate::{config::AppConfig, route::routes, state::AppState};
 
 pub async fn serve(app: Router, port: u16) {
     let addr = SocketAddr::from(([0, 0, 0, 0], port));
@@ -21,23 +21,27 @@ pub async fn serve(app: Router, port: u16) {
 }
 
 pub async fn start() {
-    // 初始化 JWT 密钥
-    let jwt_secret = load_jwt_secret();
+    // 加载配置
+    let config = AppConfig::load().expect("Failed to load configuration");
+
+    // 获取 JWT 密钥
+    let jwt_secret = config.jwt_secret();
     services::member::init_jwt_secret(jwt_secret);
 
     // 初始化存储
     let storage_config = services::StorageConfig {
-        root: "uploads".to_string(),
-        base_url: "/uploads".to_string(),
+        root: config.storage.volume.clone(),
     };
     let storage: Arc<dyn services::StorageService> = Arc::new(services::LocalStorage::new(storage_config));
 
-    let conn = store::connect_db("sqlite:homedrive.db?mode=rwc", false)
+    let conn = store::connect_db(&config.database.url, false)
         .await
         .unwrap();
+
     let shared_state = AppState {
         conn,
         storage,
+        config: Arc::new(config),
     };
 
     // CORS 配置
@@ -52,7 +56,11 @@ pub async fn start() {
         .with_state(shared_state)
         .fallback(index_handler);
 
-    serve(app, 2300).await;
+    // 获取端口（优先使用环境变量）
+    let port = crate::config::get_port_from_env()
+        .unwrap_or_else(|| AppConfig::load().map(|c| c.server.port).unwrap_or(2300));
+
+    serve(app, port).await;
 }
 
 async fn index_handler() -> impl IntoResponse {
