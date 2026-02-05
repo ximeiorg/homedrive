@@ -6,7 +6,9 @@ info:
 http:
   method: POST
   url: "{{host}}/api/files/sync"
-  auth: inherit
+  auth:
+    type: bearer
+    token: eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJzdWIiOjIsImF1ZCI6ImhvbWVkcml2ZSIsImV4cCI6MTc3MDM3MjcxOCwiaWF0IjoxNzcwMjg2MzE4fQ.i2Zjgi360UagzgQWVSzdYmnSE5Qfo6XgMqW6_u9HPsc
 
 settings:
   encodeUrl: true

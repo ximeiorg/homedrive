@@ -19,7 +19,7 @@ pub fn file_router() -> Router<AppState> {
     Router::new()
         // 公开路由
         .route("/check-hash", get(check_file_hash_exists))
-        // 受保护路由
+        // 受保护路由（每个路由单独添加中间件）
         .route(
             "/upload",
             post(upload_file).layer(axum::middleware::from_fn(auth_middleware)),

@@ -1,7 +1,7 @@
-use crate::auth::Auth;
+use crate::auth::{Auth, JwtClaims};
 use crate::error::AppError;
 use crate::state::AppState;
-use axum::{Extension, Json, extract::Path, extract::Query, response::IntoResponse};
+use axum::{Json, extract::State, extract::Path, extract::Query, response::IntoResponse};
 use sea_orm::prelude::DateTimeUtc;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
@@ -23,7 +23,7 @@ pub struct HashCheckQuery {
 
 /// Check if a file hash already exists in the database
 pub async fn check_file_hash_exists(
-    Extension(state): Extension<Arc<AppState>>,
+    State(state): State<Arc<AppState>>,
     Query(query): Query<HashCheckQuery>,
 ) -> Json<HashCheckResponse> {
     let db = &state.conn;
@@ -51,7 +51,7 @@ pub struct UploadFileResponse {
 
 /// Upload file handler - requires authentication
 pub async fn upload_file(
-    Extension(state): Extension<Arc<AppState>>,
+    State(state): State<Arc<AppState>>,
     Extension(auth): Extension<Auth>,
     mut multipart: axum::extract::Multipart,
 ) -> Json<UploadFileResponse> {
@@ -140,13 +140,13 @@ fn parse_range_header(range: &str, file_size: u64) -> Option<(u64, u64)> {
 /// Serve file handler with Range support - requires authentication
 /// Path format: /files/{storage_tag}/{file_path}
 pub async fn serve_file(
-    Extension(state): Extension<Arc<AppState>>,
-    Extension(auth): Extension<Auth>,
+    State(state): State<Arc<AppState>>,
+    cls: JwtClaims,
     Path((storage_tag, file_path)): Path<(String, String)>,
     req: axum::http::Request<axum::body::Body>,
 ) -> impl IntoResponse {
     let db = &state.conn;
-    let user_id = auth.0;
+    let user_id = cls.sub;
 
     // Get user's storage_tag from database
     let user = match store::member::query::Query::find_by_id(db, user_id).await {

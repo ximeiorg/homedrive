@@ -9,7 +9,9 @@ use crate::{config::AppConfig, route::routes, state::AppState};
 
 // 配置 jsonwebtoken 的加密提供者
 fn configure_jwt() {
-    jsonwebtoken::crypto::rust_crypto::DEFAULT_PROVIDER.install_default().unwrap();
+    jsonwebtoken::crypto::rust_crypto::DEFAULT_PROVIDER
+        .install_default()
+        .unwrap();
 }
 
 pub async fn serve(app: Router, port: u16) {

@@ -23,6 +23,7 @@ hyper-util = { version = "0.1.20", features = ["client-legacy"] }
 serde = {workspace = true, features = ["derive"]}
 thiserror = "2.0.18"
 jsonwebtoken = {version="10.3.0",features = ["rust_crypto"]}
+axum-extra = { version = "0.12.5", features = ["typed-header"] }
 rand = "0.9.2"
 base64 = "0.22"
 dotenvy = "0.15"

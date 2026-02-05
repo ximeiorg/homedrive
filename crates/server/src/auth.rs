@@ -1,9 +1,17 @@
 use crate::error::AppError;
-use axum::{extract::Request, middleware::Next, response::Response};
+use axum::{
+    extract::{FromRequestParts, Request},
+    http::request::Parts,
+    middleware::Next,
+    response::Response,
+    RequestPartsExt, 
+};
+use jsonwebtoken::{decode, DecodingKey, EncodingKey, Header, Validation};
 use serde::{Deserialize, Serialize};
+use tracing::error;
 
 /// JWT Claims
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct JwtClaims {
     pub sub: i64,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -12,46 +20,46 @@ pub struct JwtClaims {
     pub iat: u64,
 }
 
-/// 认证扩展 - 从 JWT 中提取用户 ID
-#[derive(Clone, Debug)]
-pub struct Auth(pub i64);
-
-/// 从请求头中提取 JWT token
-fn extract_token_from_header(auth_header: &str) -> Option<&str> {
-    if let Some(token) = auth_header.strip_prefix("Bearer ") {
-        Some(token)
-    } else {
-        None
-    }
-}
-
-/// JWT 认证中间件
-pub async fn auth_middleware(req: Request, next: Next) -> Result<Response, AppError> {
-    let token = req
-        .headers()
-        .get("authorization")
-        .and_then(|h| h.to_str().ok())
-        .and_then(|auth_header| extract_token_from_header(auth_header))
-        .ok_or(AppError::InvalidCredentials)?;
-
-    // 使用 services 的全局密钥
+/// JWT 密钥管理
+pub(crate) static JWT_SECRET_KEY: Lazy<(EncodingKey, DecodingKey)> = Lazy::new(|| {
     let secret = services::get_jwt_secret();
-    let decoding_key = jsonwebtoken::DecodingKey::from_secret(secret.as_bytes());
-
-    let validation = jsonwebtoken::Validation::default();
-
-    let token_data: jsonwebtoken::TokenData<JwtClaims> =
-        jsonwebtoken::decode(token, &decoding_key, &validation)
-            .map_err(|_| AppError::InvalidCredentials)?;
-
-    // 将用户 ID 存入请求扩展
-    let mut req = req;
-    req.extensions_mut().insert(Auth(token_data.claims.sub));
-
-    Ok(next.run(req).await)
-}
+    let secret = secret.as_bytes();
+    (EncodingKey::from_secret(secret), DecodingKey::from_secret(secret))
+});
 
 /// 从请求中获取当前用户 ID
 pub fn get_current_user_id(req: &Request) -> Option<i64> {
-    req.extensions().get::<Auth>().map(|a| a.0)
+    req.extensions().get::<JwtClaims>().map(|c| c.sub)
+}
+
+
+impl<S> FromRequestParts<S> for JwtClaims
+where
+    S: Send + Sync,
+{
+    type Rejection = AppError;
+
+    async fn from_request_parts(parts: &mut Parts, _state: &S) -> Result<Self, Self::Rejection> {
+        let token = parts
+        .headers
+        .get("authorization")
+        .and_then(|h| h.to_str().ok())
+        .and_then(|h| h.strip_prefix("Bearer "))
+        .ok_or(AppError::InvalidCredentials)?;
+
+    let decoding_key = &JWT_SECRET_KEY.1;
+
+    // 验证 audience（与编码时一致）
+    let mut validation = Validation::default();
+    validation.set_audience(&["homedrive"]);
+
+    let token_data: jsonwebtoken::TokenData<JwtClaims> =
+        decode(token, decoding_key, &validation).map_err(|e| {
+            error!("JWT decode error: {:?}", e);
+            AppError::InvalidCredentials
+        })?;
+
+
+        Ok(token_data.claims)
+    }
 }
