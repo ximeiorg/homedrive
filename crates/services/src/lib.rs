@@ -9,8 +9,7 @@ pub use file_content::{FileCheckResponse, FileService, FileUploadResponse};
 pub use member::{MemberService, get_jwt_secret, init_jwt_secret};
 pub use storage::{LocalStorage, StorageConfig, StorageService};
 pub use task::{
-    TaskType, TaskStatus, TaskPayload, TaskOptions, TaskMessage,
-    TaskHandler, TaskWorker, TaskWorkerConfig,
-    TaskSender, TaskSenderType, create_task_channel,
-    SyncDirectoryHandler, SyncDatabaseHandler,
+    SyncDatabaseHandler, SyncDirectoryHandler, TaskHandler, TaskMessage, TaskOptions, TaskPayload,
+    TaskSender, TaskSenderType, TaskStatus, TaskType, TaskWorker, TaskWorkerConfig,
+    create_task_channel,
 };

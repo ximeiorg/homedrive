@@ -226,8 +226,8 @@ impl Query {
         let sort_order = query.sort_order.unwrap_or(SortOrder::Desc);
 
         // 构建基础查询
-        let mut select = member_files::Entity::find()
-            .filter(member_files::Column::MemberId.eq(member_id));
+        let mut select =
+            member_files::Entity::find().filter(member_files::Column::MemberId.eq(member_id));
 
         // 应用文件名搜索
         if let Some(ref search) = query.search {
@@ -236,23 +236,21 @@ impl Query {
 
         // 应用排序（暂不支持 file_size 排序，因为需要关联查询）
         match sort_by {
-            SortField::CreatedAt => {
-                match sort_order {
-                    SortOrder::Asc => select = select.order_by_asc(member_files::Column::CreatedAt),
-                    SortOrder::Desc => select = select.order_by_desc(member_files::Column::CreatedAt),
-                }
-            }
-            SortField::FileName => {
-                match sort_order {
-                    SortOrder::Asc => select = select.order_by_asc(member_files::Column::FileName),
-                    SortOrder::Desc => select = select.order_by_desc(member_files::Column::FileName),
-                }
-            }
+            SortField::CreatedAt => match sort_order {
+                SortOrder::Asc => select = select.order_by_asc(member_files::Column::CreatedAt),
+                SortOrder::Desc => select = select.order_by_desc(member_files::Column::CreatedAt),
+            },
+            SortField::FileName => match sort_order {
+                SortOrder::Asc => select = select.order_by_asc(member_files::Column::FileName),
+                SortOrder::Desc => select = select.order_by_desc(member_files::Column::FileName),
+            },
             SortField::FileSize => {
                 // 按创建时间降序作为默认（因为没有 file_size 字段的直接访问）
                 match sort_order {
                     SortOrder::Asc => select = select.order_by_asc(member_files::Column::CreatedAt),
-                    SortOrder::Desc => select = select.order_by_desc(member_files::Column::CreatedAt),
+                    SortOrder::Desc => {
+                        select = select.order_by_desc(member_files::Column::CreatedAt)
+                    }
                 }
             }
         }

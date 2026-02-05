@@ -1,18 +1,17 @@
 info:
-  name: init_admin
+  name: login
   type: http
-  seq: 1
+  seq: 3
 
 http:
   method: POST
-  url: "{{host}}/api/init"
+  url: "{{host}}/api/auth/login"
   body:
     type: json
     data: |-
       {
-        "username":"admin",
-        "password":"123456",
-        "storage_tag":"test"
+        "username": "admin",
+        "password": "123456"
       }
   auth: inherit
 

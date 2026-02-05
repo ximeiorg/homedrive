@@ -1,54 +1,38 @@
-use crate::auth::auth_middleware;
-use crate::state::AppState;
+//! 路由模块
+//!
+//! 定义应用的所有路由入口，按模块分区组织
+
+mod auth;
+mod file;
+mod member;
+
+pub use auth::auth_router;
+pub use file::{file_router, static_router};
+pub use member::member_router;
+
+use crate::{
+    handler::member::{check_members_empty, check_username_exists, init_admin},
+    state::AppState,
+};
 use axum::{
     Router,
-    routing::{delete, get, post, put},
+    routing::{get, post},
 };
 
-use crate::handler::member::{
-    check_members_empty, check_username_exists, create_member, delete_member, get_member,
-    get_member_by_username, init_admin, list_members, login, update_member, update_member_avatar,
-    update_member_password,
-};
-
-use crate::handler::file::{
-    check_file_hash_exists,
-    list_files,
-    serve_file,
-    trigger_sync_files,
-    upload_file,
-};
-
-pub fn routes(state: AppState) -> axum::Router<AppState> {
-    // Public routes - no authentication required
-    let public_routes = Router::new()
-        .route("/login", post(login))
+/// 创建应用主路由
+pub fn routes(state: AppState) -> Router<AppState> {
+    Router::new()
+        // 公开路由
         .route("/username/{username}/exists", get(check_username_exists))
         .route("/empty", get(check_members_empty))
-        .route("/init", post(init_admin));
-
-    // File routes - check hash is public, upload and serve require auth
-    let file_routes = Router::new()
-        .route("/check-hash", get(check_file_hash_exists))
-        .route("/upload", post(upload_file).layer(axum::middleware::from_fn(auth_middleware)))
-        .route("/list", get(list_files).layer(axum::middleware::from_fn(auth_middleware)))
-        .route("/sync", post(trigger_sync_files).layer(axum::middleware::from_fn(auth_middleware)))
-        .route("/:storage_tag/*path", get(serve_file).layer(axum::middleware::from_fn(auth_middleware)));
-
-    // Protected routes - require JWT authentication
-    let protected_routes = Router::new()
-        .route("/", post(create_member))
-        .route("/", get(list_members))
-        .route("/{id}", get(get_member))
-        .route("/{id}", put(update_member))
-        .route("/{id}", delete(delete_member))
-        .route("/username/{username}", get(get_member_by_username))
-        .route("/{id}/avatar", put(update_member_avatar))
-        .route("/{id}/password", put(update_member_password))
-        .layer(axum::middleware::from_fn(auth_middleware));
-
-    Router::new()
-        .nest("/members", public_routes.merge(protected_routes))
-        .nest("/files", file_routes)
+        .route("/init", post(init_admin))
+        // 成员模块路由（需要认证）
+        .nest("/members", member_router())
+        // 文件模块路由
+        .nest("/files", file_router())
+        // 静态文件路由
+        .nest("/static", static_router())
+        // 认证模块路由
+        .nest("/auth", auth_router())
         .with_state(state)
 }

@@ -17,10 +17,16 @@ impl MigrationTrait for Migration {
                     .col(integer(SyncMessages::Progress).default(0)) // 进度: 0-100
                     .col(string(SyncMessages::Status).not_null().default("pending")) // 状态: pending, processing, completed, failed
                     .col(text(SyncMessages::Payload)) // 消息内容(JSON格式，存储同步参数)
-                    .col(text(SyncMessages::ErrorMessage).nullable()) // 错误信息
-                    .col(timestamp(SyncMessages::CreatedAt).default(SimpleExpr::Keyword(Keyword::CurrentTimestamp)))
-                    .col(timestamp(SyncMessages::UpdatedAt).default(SimpleExpr::Keyword(Keyword::CurrentTimestamp)))
-                    .col(timestamp(SyncMessages::CompletedAt).nullable()) // 完成时间
+                    .col(text(SyncMessages::ErrorMessage).null()) // 错误信息
+                    .col(
+                        timestamp(SyncMessages::CreatedAt)
+                            .default(SimpleExpr::Keyword(Keyword::CurrentTimestamp)),
+                    )
+                    .col(
+                        timestamp(SyncMessages::UpdatedAt)
+                            .default(SimpleExpr::Keyword(Keyword::CurrentTimestamp)),
+                    )
+                    .col(timestamp(SyncMessages::CompletedAt).null()) // 完成时间
                     .to_owned(),
             )
             .await?;

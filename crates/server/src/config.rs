@@ -52,7 +52,6 @@ fn default_volume() -> String {
     "./Homedrive".to_string()
 }
 
-
 /// JWT 配置
 #[derive(Debug, Deserialize, Clone)]
 pub struct JwtConfig {

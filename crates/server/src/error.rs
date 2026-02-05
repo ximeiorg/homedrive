@@ -46,7 +46,22 @@ impl AppError {
             Self::NotFound => "not found".into(),
             Self::InvalidInput(msg) => msg.clone(),
             // 系统错误只返回通用消息
-            Self::DatabaseError | Self::Unknown | Self::ServiceError(_) => "internal server error".into(),
+            Self::DatabaseError | Self::Unknown => {
+                tracing::error!(category = "system", "Internal server error");
+                "internal server error".into()
+            }
+            Self::ServiceError(e) => match e.category() {
+                services::ErrorCategory::Business => e.to_string(),
+                services::ErrorCategory::System => {
+                    tracing::error!(
+                        error = ?e,
+                        error_message = %e,
+                        category = "system",
+                        "Internal server error"
+                    );
+                    "internal server error".into()
+                }
+            },
         }
     }
 
@@ -54,7 +69,11 @@ impl AppError {
     pub fn should_log(&self) -> bool {
         match self {
             // 业务错误通常不需要记录 error 级别日志
-            Self::MemberNotFound | Self::MemberAlreadyExists | Self::InvalidCredentials | Self::Forbidden | Self::NotFound => false,
+            Self::MemberNotFound
+            | Self::MemberAlreadyExists
+            | Self::InvalidCredentials
+            | Self::Forbidden
+            | Self::NotFound => false,
             // 系统错误需要记录
             Self::InvalidInput(_) => false, // 也可以设为 true，取决于需求
             Self::DatabaseError | Self::Unknown | Self::ServiceError(_) => true,
@@ -67,13 +86,6 @@ pub type Result<T> = std::result::Result<T, AppError>;
 impl IntoResponse for AppError {
     fn into_response(self) -> axum::response::Response {
         // 记录内部错误的详细信息
-        if self.should_log() {
-            tracing::error!(
-                error = ?self,
-                category = "system",
-                "Internal server error"
-            );
-        }
 
         let status = match &self {
             // 业务逻辑错误 - 返回对应的 HTTP 状态码
@@ -83,9 +95,16 @@ impl IntoResponse for AppError {
             Self::Forbidden => StatusCode::FORBIDDEN,
             Self::NotFound => StatusCode::NOT_FOUND,
             Self::InvalidInput(_) => StatusCode::BAD_REQUEST,
-            
+
             // 系统内部错误 - 返回 500
-            Self::DatabaseError | Self::Unknown => StatusCode::INTERNAL_SERVER_ERROR,
+            Self::DatabaseError => {
+                tracing::error!(category = "system", "Database error occurred");
+                StatusCode::INTERNAL_SERVER_ERROR
+            }
+            Self::Unknown => {
+                tracing::error!(category = "system", "Unknown error occurred");
+                StatusCode::INTERNAL_SERVER_ERROR
+            }
             Self::ServiceError(e) => {
                 match e.category() {
                     services::ErrorCategory::Business => {
@@ -98,7 +117,15 @@ impl IntoResponse for AppError {
                             _ => StatusCode::INTERNAL_SERVER_ERROR,
                         }
                     }
-                    services::ErrorCategory::System => StatusCode::INTERNAL_SERVER_ERROR,
+                    services::ErrorCategory::System => {
+                        tracing::error!(
+                            error = ?e,
+                            error_message = %e,
+                            category = "system",
+                            "Service system error"
+                        );
+                        StatusCode::INTERNAL_SERVER_ERROR
+                    }
                 }
             }
         };

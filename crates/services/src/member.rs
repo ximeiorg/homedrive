@@ -293,26 +293,20 @@ impl MemberService {
         // 使用用户提供的 storage_tag
         let storage_tag = data.storage_tag;
 
-        // 创建管理员
-        let create_data = store::member::mutation::CreateMember {
+        // 调用 create_member 来创建管理员（会进行密码哈希和验证）
+        let create_request = CreateMemberRequest {
             username: data.username,
-            password: data.password, // 会在 create_member 中进行哈希
+            password: data.password,
             avatar: None,
             storage_tag,
         };
 
-        let member = store::member::mutation::Mutation::create(db, create_data).await?;
+        let member = Self::create_member(db, create_request).await?;
 
         Ok(InitAdminResponse {
             success: true,
             message: "Admin user created successfully".to_string(),
-            member: Some(MemberResponse {
-                id: member.id,
-                username: member.username,
-                avatar: member.avatar,
-                storage_tag: member.storage_tag,
-                created_at: member.created_at,
-            }),
+            member: Some(member),
         })
     }
 }

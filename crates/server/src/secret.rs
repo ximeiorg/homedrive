@@ -51,7 +51,7 @@ pub fn load_jwt_secret() -> String {
 
 /// 生成随机密钥（32字节 base64编码）
 pub fn generate_jwt_secret() -> String {
-    let mut rng = rand::thread_rng();
+    let mut rng = rand::rng();
     let mut key = [0u8; 32];
     rng.fill_bytes(&mut key);
     base64::Engine::encode(&base64::engine::general_purpose::STANDARD, key)

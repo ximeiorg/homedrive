@@ -3,18 +3,42 @@
 //! 提供通用的任务队列框架，支持多种任务类型。
 //! 使用 tokio mpsc channel 实现异步任务处理。
 
-use chrono::Utc;
-use serde::{Deserialize, Serialize};
-use std::sync::Arc;
-use tracing::{info, error, debug};
-use sea_orm::{entity::prelude::*, QueryOrder, QuerySelect};
 use crate::Result;
 use crate::ServiceError;
-use store::entity::sync_messages::{ActiveModel, Column, Entity as SyncMessages, Model, SyncStatus as DbSyncStatus};
+use chrono::Utc;
+use sea_orm::{QueryOrder, QuerySelect, entity::prelude::*};
+use serde::{Deserialize, Serialize};
+use std::sync::Arc;
+use store::entity::sync_messages::{
+    ActiveModel, Column, Entity as SyncMessages, Model, SyncStatus as DbSyncStatus,
+};
+use tracing::{debug, error, info};
 
 pub(crate) mod sync_file;
 
-pub use sync_file::{SyncDirectoryHandler, SyncDatabaseHandler};
+pub use sync_file::SyncDirectoryHandler;
+
+// SyncDatabaseHandler 待实现
+#[derive(Clone)]
+pub struct SyncDatabaseHandler;
+
+impl SyncDatabaseHandler {
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+#[async_trait::async_trait]
+impl TaskHandler for SyncDatabaseHandler {
+    fn task_type(&self) -> &'static str {
+        "sync_database"
+    }
+
+    async fn handle(&self, _payload: &TaskPayload) -> Result<()> {
+        // TODO: 实现从数据库同步到目录的逻辑
+        Ok(())
+    }
+}
 
 /// 任务类型枚举
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -109,13 +133,16 @@ pub enum TaskMessage {
 }
 
 /// 任务处理器 trait
+///
+/// 处理器在创建时需要传入数据库连接（Arc 包装），这样 handle 方法就不需要每次都传入连接。
 #[async_trait::async_trait]
 pub trait TaskHandler: Send + Sync {
     /// 获取任务类型
     fn task_type(&self) -> &'static str;
-    
+
     /// 处理任务
-    async fn handle(&self, payload: &TaskPayload, conn: &sea_orm::DatabaseConnection) -> Result<()>;
+    /// 注意：handler 内部已经持有数据库连接，无需外部传入
+    async fn handle(&self, payload: &TaskPayload) -> Result<()>;
 }
 
 /// 任务工作器配置
@@ -225,11 +252,13 @@ impl TaskWorker {
         );
 
         // 查找对应的处理器
-        let handler = self.handlers.iter()
+        let handler = self
+            .handlers
+            .iter()
             .find(|h| h.task_type() == payload.task_type);
 
         if let Some(h) = handler {
-            h.handle(payload, &*self.conn).await?;
+            h.handle(payload).await?;
         } else {
             info!("未找到任务类型 {} 的处理器，跳过", payload.task_type);
         }
@@ -242,7 +271,7 @@ impl TaskWorker {
         let pending_tasks = SyncMessages::find()
             .filter(
                 sea_orm::Condition::all()
-                    .add(Column::Status.eq(DbSyncStatus::Pending.as_str().to_string()))
+                    .add(Column::Status.eq(DbSyncStatus::Pending.as_str().to_string())),
             )
             .order_by_asc(Column::CreatedAt)
             .limit(10)
@@ -257,31 +286,35 @@ impl TaskWorker {
 
         for task in pending_tasks {
             // 更新状态为 processing
-            if let Err(e) = self.update_task_status(&task, DbSyncStatus::Processing).await {
+            if let Err(e) = self
+                .update_task_status(&task, DbSyncStatus::Processing)
+                .await
+            {
                 error!("更新任务状态失败: {}", e);
                 continue;
             }
 
             // 解析任务负载
-            let payload: Result<TaskPayload> = serde_json::from_str(&task.payload)
-                .map_err(|e| ServiceError::Other(e.to_string()));
+            let payload: Result<TaskPayload> =
+                serde_json::from_str(&task.payload).map_err(|e| ServiceError::Other(e.to_string()));
 
             match payload {
-                Ok(p) => {
-                    match self.process_task(&p).await {
-                        Ok(()) => {
-                            if let Err(e) = self.update_task_status(&task, DbSyncStatus::Completed).await {
-                                error!("更新任务完成状态失败: {}", e);
-                            } else {
-                                info!("任务 #{} 处理完成", task.id);
-                            }
-                        }
-                        Err(e) => {
-                            self.mark_task_failed(&task, &e.to_string()).await?;
-                            error!("任务 #{} 处理失败: {}", task.id, e);
+                Ok(p) => match self.process_task(&p).await {
+                    Ok(()) => {
+                        if let Err(e) = self
+                            .update_task_status(&task, DbSyncStatus::Completed)
+                            .await
+                        {
+                            error!("更新任务完成状态失败: {}", e);
+                        } else {
+                            info!("任务 #{} 处理完成", task.id);
                         }
                     }
-                }
+                    Err(e) => {
+                        self.mark_task_failed(&task, &e.to_string()).await?;
+                        error!("任务 #{} 处理失败: {}", task.id, e);
+                    }
+                },
                 Err(e) => {
                     self.mark_task_failed(&task, &e.to_string()).await?;
                 }
@@ -334,21 +367,25 @@ impl TaskSender {
 
     /// 发送任务
     pub async fn send(&self, payload: TaskPayload) -> Result<()> {
-        self.tx.send(TaskMessage::NewTask(payload))
+        self.tx
+            .send(TaskMessage::NewTask(payload))
             .await
             .map_err(|e| ServiceError::Other(e.to_string()))
     }
 
     /// 发送停止信号
     pub async fn shutdown(&self) -> Result<()> {
-        self.tx.send(TaskMessage::Shutdown)
+        self.tx
+            .send(TaskMessage::Shutdown)
             .await
             .map_err(|e| ServiceError::Other(e.to_string()))
     }
 }
 
 /// 创建任务 channel
-pub fn create_task_channel(buffer: usize) -> (TaskSender, tokio::sync::mpsc::Receiver<TaskMessage>) {
+pub fn create_task_channel(
+    buffer: usize,
+) -> (TaskSender, tokio::sync::mpsc::Receiver<TaskMessage>) {
     let (tx, rx) = tokio::sync::mpsc::channel(buffer);
     let sender = TaskSender::new(tx);
     (sender, rx)

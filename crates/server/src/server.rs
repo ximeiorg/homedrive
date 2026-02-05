@@ -1,11 +1,16 @@
 use std::net::SocketAddr;
 use std::sync::Arc;
 
-use axum::{http::Method, http::StatusCode, response::IntoResponse, Router};
-use tracing::info;
+use axum::{Router, http::Method, http::StatusCode, response::IntoResponse};
 use tower_http::cors::{Any, CorsLayer};
+use tracing::info;
 
 use crate::{config::AppConfig, route::routes, state::AppState};
+
+// 配置 jsonwebtoken 的加密提供者
+fn configure_jwt() {
+    jsonwebtoken::crypto::rust_crypto::DEFAULT_PROVIDER.install_default().unwrap();
+}
 
 pub async fn serve(app: Router, port: u16) {
     let addr = SocketAddr::from(([0, 0, 0, 0], port));
@@ -21,6 +26,9 @@ pub async fn serve(app: Router, port: u16) {
 }
 
 pub async fn start() {
+    // 配置 JWT 加密提供者（必须在其他 JWT 操作之前调用）
+    configure_jwt();
+
     // 加载配置
     let config = AppConfig::load().expect("Failed to load configuration");
 
@@ -32,7 +40,8 @@ pub async fn start() {
     let storage_config = services::StorageConfig {
         root: config.storage.volume.clone(),
     };
-    let storage: Arc<dyn services::StorageService> = Arc::new(services::LocalStorage::new(storage_config));
+    let storage: Arc<dyn services::StorageService> =
+        Arc::new(services::LocalStorage::new(storage_config));
 
     let conn = store::connect_db(&config.database.url, false)
         .await
@@ -51,10 +60,12 @@ pub async fn start() {
 
     // 创建工作器并注册处理器
     let (mut worker, _) = services::TaskWorker::new(conn_arc.clone(), Some(task_config), 100);
-    
+
     // 注册任务处理器
-    worker.register_handler(Arc::new(services::SyncDirectoryHandler::new(config.storage.volume.clone())));
-    worker.register_handler(Arc::new(services::SyncDatabaseHandler::new()));
+    worker.register_handler(Arc::new(services::SyncDirectoryHandler::new(
+        config.storage.volume.clone(),
+        conn_arc.clone(),
+    )));
 
     // 在后台启动任务工作器
     tokio::spawn(async move {

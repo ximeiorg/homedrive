@@ -1,19 +1,24 @@
-use crate::{TaskHandler, TaskPayload, Result};
-use sea_orm::{ActiveModelTrait, ColumnTrait as _, EntityTrait, QueryFilter as _, Set};
+use crate::{Result, TaskHandler, TaskPayload};
+use sea_orm::{
+    ActiveModelTrait, ColumnTrait as _, DatabaseConnection, EntityTrait, QueryFilter as _, Set,
+};
 use std::path::Path;
+use std::sync::Arc;
 use tokio::fs;
-use tracing::{info, debug, warn};
+use tracing::{debug, info, warn};
 
 /// 同步目录处理器
 /// 将 storage 目录下的文件同步到数据库
 pub struct SyncDirectoryHandler {
     /// 存储根目录
     storage_root: String,
+    /// 数据库连接（Arc 包装以支持 Clone）
+    conn: Arc<DatabaseConnection>,
 }
 
 impl SyncDirectoryHandler {
-    pub fn new(storage_root: String) -> Self {
-        Self { storage_root }
+    pub fn new(storage_root: String, conn: Arc<DatabaseConnection>) -> Self {
+        Self { storage_root, conn }
     }
 
     /// 计算文件的 xxhash3 哈希值
@@ -31,7 +36,7 @@ impl SyncDirectoryHandler {
             .and_then(|e| e.to_str())
             .unwrap_or("")
             .to_lowercase();
-        
+
         match ext.as_str() {
             "jpg" | "jpeg" => "image/jpeg",
             "png" => "image/png",
@@ -50,7 +55,8 @@ impl SyncDirectoryHandler {
             "json" => "application/json",
             "zip" => "application/zip",
             _ => "application/octet-stream",
-        }.to_string()
+        }
+        .to_string()
     }
 }
 
@@ -59,79 +65,82 @@ impl TaskHandler for SyncDirectoryHandler {
     fn task_type(&self) -> &'static str {
         "sync_directory"
     }
-    
+
     /// 处理任务
     /// 同步 storage_root 下的目录，其实 storage_root 下的目录是用户的 storage_tag 名称，
     /// 每个目录下的文件都是用户的文件，需要同步到用户的存储中。
-    /// 
+    ///
     /// 步骤：
     /// 1. 列出 storage_root 下的所有目录（storage_tag）
     /// 2. 查询 storage_tag 对应的用户 id (member_id)
     /// 3. 对比文件是否在 file_contents 表中存在（通过 hash）
     /// 4. 对比 member_files 表是否存在记录
     /// 5. 如果不存在，添加记录到数据表
-    async fn handle(&self, _payload: &TaskPayload, conn: &sea_orm::DatabaseConnection) -> Result<()> {
+    async fn handle(&self, _payload: &TaskPayload) -> Result<()> {
         let storage_root = Path::new(&self.storage_root);
-        
+
         info!("Starting file synchronization from: {}", self.storage_root);
-        
+
         // 1. 列出 storage_root 下的所有目录（storage_tag）
         let mut entries = fs::read_dir(storage_root).await.map_err(|e| {
             crate::ServiceError::Storage(format!("Failed to read storage root directory: {}", e))
         })?;
-        
+
         while let Some(entry) = entries.next_entry().await.map_err(|e| {
             crate::ServiceError::Storage(format!("Failed to read directory entry: {}", e))
         })? {
             let entry_path = entry.path();
-            
+
             // 只处理目录（storage_tag）
             if !entry_path.is_dir() {
                 debug!("Skipping non-directory entry: {:?}", entry_path);
                 continue;
             }
-            
+
             let storage_tag = entry.file_name().to_string_lossy().to_string();
             debug!("Processing storage_tag: {}", storage_tag);
-            
+
             // 2. 查询 storage_tag 对应的用户 id (member_id)
             let member = store::entity::members::Entity::find()
                 .filter(store::entity::members::Column::StorageTag.eq(storage_tag.clone()))
-                .one(conn)
+                .one(&*self.conn)
                 .await?;
-            
+
             if member.is_none() {
                 warn!("No member found for storage_tag: {}, skipping", storage_tag);
                 continue;
             }
-            
+
             let member_id = member.unwrap().id;
-            info!("Found member {} for storage_tag: {}", member_id, storage_tag);
-            
+            info!(
+                "Found member {} for storage_tag: {}",
+                member_id, storage_tag
+            );
+
             // 3. 使用栈遍历目录下的所有文件（非递归）
             let mut dir_stack = vec![entry_path.clone()];
-            
+
             while let Some(current_dir) = dir_stack.pop() {
                 let mut entries = fs::read_dir(&current_dir).await.map_err(|e| {
                     crate::ServiceError::Storage(format!("Failed to read directory: {}", e))
                 })?;
-                
+
                 while let Some(entry) = entries.next_entry().await.map_err(|e| {
                     crate::ServiceError::Storage(format!("Failed to read directory entry: {}", e))
                 })? {
                     let entry_path = entry.path();
-                    
+
                     if entry_path.is_dir() {
                         // 将子目录加入栈中
                         dir_stack.push(entry_path);
                     } else if entry_path.is_file() {
                         // 处理文件
-                        self.sync_file(&entry_path, member_id, conn).await?;
+                        self.sync_file(&entry_path, member_id).await?;
                     }
                 }
             }
         }
-        
+
         info!("File synchronization completed");
         Ok(())
     }
@@ -139,47 +148,46 @@ impl TaskHandler for SyncDirectoryHandler {
 
 impl SyncDirectoryHandler {
     /// 同步单个文件
-    async fn sync_file(
-        &self,
-        file_path: &Path,
-        member_id: i64,
-        conn: &sea_orm::DatabaseConnection,
-    ) -> Result<()> {
-        let file_name = file_path.file_name()
+    async fn sync_file(&self, file_path: &Path, member_id: i64) -> Result<()> {
+        let file_name = file_path
+            .file_name()
             .and_then(|n| n.to_str())
             .ok_or_else(|| crate::ServiceError::Storage("Invalid file name".to_string()))?
             .to_string();
-        
+
         let file_name_lower = file_name.to_lowercase();
-        
+
         // 跳过隐藏文件和系统文件
-        if file_name.starts_with('.') || file_name_lower == ".ds_store" || file_name_lower == "thumbs.db" {
+        if file_name.starts_with('.')
+            || file_name_lower == ".ds_store"
+            || file_name_lower == "thumbs.db"
+        {
             debug!("Skipping hidden/system file: {:?}", file_path);
             return Ok(());
         }
-        
+
         // 读取文件内容用于计算哈希
-        let content = fs::read(file_path).await.map_err(|e| {
-            crate::ServiceError::Storage(format!("Failed to read file: {}", e))
-        })?;
-        
+        let content = fs::read(file_path)
+            .await
+            .map_err(|e| crate::ServiceError::Storage(format!("Failed to read file: {}", e)))?;
+
         // 计算文件哈希（与前端一致）
         let content_hash = Self::calculate_hash(&content);
         debug!("File: {}, Hash: {}", file_name, content_hash);
-        
+
         let file_size = content.len() as i64;
-        
+
         // 获取 MIME 类型
         let mime_type = Self::get_mime_type(&file_name);
-        
+
         // 4. 检查 file_contents 表中是否已存在
         let existing_content = store::entity::file_contents::Entity::find()
             .filter(store::entity::file_contents::Column::ContentHash.eq(content_hash.clone()))
-            .one(conn)
+            .one(&*self.conn)
             .await?;
-        
+
         let file_content_id: i64;
-        
+
         if let Some(content) = existing_content {
             // 文件已存在，更新 ref_count
             file_content_id = content.id;
@@ -190,14 +198,17 @@ impl SyncDirectoryHandler {
                 _ => 0,
             };
             active_model.ref_count = Set(current_ref_count + 1);
-            active_model.update(conn).await?;
-            debug!("File content already exists, id: {}, updated ref_count", file_content_id);
+            active_model.update(&*self.conn).await?;
+            debug!(
+                "File content already exists, id: {}, updated ref_count",
+                file_content_id
+            );
         } else {
             // 5. 添加新记录到 file_contents
             // 计算相对路径（相对于 storage_root）
             let storage_path = file_path.to_string_lossy().replace(&self.storage_root, "");
             let storage_path = storage_path.trim_start_matches('/').to_string();
-            
+
             let new_content = store::entity::file_contents::ActiveModel {
                 content_hash: Set(content_hash.clone()),
                 file_size: Set(file_size),
@@ -211,19 +222,19 @@ impl SyncDirectoryHandler {
                 first_uploaded_by: Set(member_id),
                 ..Default::default()
             };
-            
-            let result = new_content.insert(conn).await?;
+
+            let result = new_content.insert(&*self.conn).await?;
             file_content_id = result.id;
             debug!("Created new file_content, id: {}", file_content_id);
         }
-        
+
         // 6. 检查 member_files 表中是否已存在
         let existing_member_file = store::entity::member_files::Entity::find()
             .filter(store::entity::member_files::Column::MemberId.eq(member_id))
             .filter(store::entity::member_files::Column::FileContentId.eq(file_content_id))
-            .one(conn)
+            .one(&*self.conn)
             .await?;
-        
+
         if existing_member_file.is_none() {
             // 添加新记录到 member_files
             let new_member_file = store::entity::member_files::ActiveModel {
@@ -235,36 +246,20 @@ impl SyncDirectoryHandler {
                 updated_at: Set(chrono::Utc::now()),
                 ..Default::default()
             };
-            
-            new_member_file.insert(conn).await?;
-            debug!("Created new member_file for member: {}, file: {}", member_id, file_name);
+
+            new_member_file.insert(&*self.conn).await?;
+            debug!(
+                "Created new member_file for member: {}, file: {}",
+                member_id, file_name
+            );
         } else {
-            debug!("Member file already exists for member: {}, file: {}", member_id, file_name);
+            debug!(
+                "Member file already exists for member: {}, file: {}",
+                member_id, file_name
+            );
         }
-        
+
         info!("Synced file: {} (hash: {})", file_name, content_hash);
-        Ok(())
-    }
-}
-
-/// 从数据库同步到目录的处理器
-pub struct SyncDatabaseHandler;
-
-impl SyncDatabaseHandler {
-    pub fn new() -> Self {
-        Self
-    }
-}
-
-#[async_trait::async_trait]
-impl TaskHandler for SyncDatabaseHandler {
-    fn task_type(&self) -> &'static str {
-        "sync_database"
-    }
-    
-    async fn handle(&self, _payload: &TaskPayload, _conn: &sea_orm::DatabaseConnection) -> Result<()> {
-        // TODO: 实现从数据库同步到目录的逻辑
-        info!("SyncDatabaseHandler: Handling sync from database to directory");
         Ok(())
     }
 }

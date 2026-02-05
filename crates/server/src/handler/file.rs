@@ -1,7 +1,7 @@
 use crate::auth::Auth;
 use crate::error::AppError;
 use crate::state::AppState;
-use axum::{extract::Path, extract::Query, Extension, Json, response::IntoResponse};
+use axum::{Extension, Json, extract::Path, extract::Query, response::IntoResponse};
 use sea_orm::prelude::DateTimeUtc;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
@@ -9,7 +9,7 @@ use std::sync::Arc;
 use tokio::fs::File;
 use tokio_util::io::ReaderStream;
 
-use store::member_file::query::{ListMemberFilesQuery, SortField, SortOrder, FileTypeFilter};
+use store::member_file::query::{FileTypeFilter, ListMemberFilesQuery, SortField, SortOrder};
 
 #[derive(Serialize)]
 pub struct HashCheckResponse {
@@ -61,7 +61,10 @@ pub async fn upload_file(
     // Get the file from multipart
     if let Some(field) = multipart.next_field().await.unwrap_or(None) {
         let filename = field.file_name().unwrap_or("unknown").to_string();
-        let content_type = field.content_type().unwrap_or("application/octet-stream").to_string();
+        let content_type = field
+            .content_type()
+            .unwrap_or("application/octet-stream")
+            .to_string();
         let data = field.bytes().await.unwrap_or_default();
 
         // Get the hash from form field
@@ -73,7 +76,10 @@ pub async fn upload_file(
         };
 
         // Check if hash already exists
-        if let Some(existing_id) = services::FileService::find_by_hash(db, &hash).await.unwrap_or(None) {
+        if let Some(existing_id) = services::FileService::find_by_hash(db, &hash)
+            .await
+            .unwrap_or(None)
+        {
             return Json(UploadFileResponse {
                 success: true,
                 file_id: existing_id,
@@ -156,7 +162,7 @@ pub async fn serve_file(
 
     // Get storage root from config
     let storage_root = &state.config.storage.volume;
-    
+
     // Build the file path following LocalStorage's directory structure
     // LocalStorage uses: root/{hash_prefix}/{storage_tag}/{file_path}
     let mut file_path_buf = PathBuf::from(storage_root);
@@ -164,7 +170,7 @@ pub async fn serve_file(
         file_path_buf.push(&storage_tag[0..2]);
     }
     file_path_buf.push(&storage_tag);
-    
+
     // Add the file path components
     for part in file_path.split('/') {
         if !part.is_empty() {
@@ -197,10 +203,9 @@ pub async fn serve_file(
     let range_header = req.headers().get("range");
 
     let (status, headers, body) = if let Some(range_value) = range_header {
-        if let Some((start, end)) = parse_range_header(
-            range_value.to_str().unwrap_or(""),
-            file_size,
-        ) {
+        if let Some((start, end)) =
+            parse_range_header(range_value.to_str().unwrap_or(""), file_size)
+        {
             let content_length = end - start + 1;
 
             // Open file for streaming
@@ -212,10 +217,20 @@ pub async fn serve_file(
             let stream = ReaderStream::new(file);
             let headers = vec![
                 (axum::http::header::CONTENT_TYPE, content_type),
-                (axum::http::header::CONTENT_LENGTH, content_length.to_string()),
-                (axum::http::header::CONTENT_RANGE, format!("bytes {}-{}/{}", start, end, file_size)),
+                (
+                    axum::http::header::CONTENT_LENGTH,
+                    content_length.to_string(),
+                ),
+                (
+                    axum::http::header::CONTENT_RANGE,
+                    format!("bytes {}-{}/{}", start, end, file_size),
+                ),
             ];
-            (axum::http::StatusCode::PARTIAL_CONTENT, headers, axum::body::Body::from_stream(stream))
+            (
+                axum::http::StatusCode::PARTIAL_CONTENT,
+                headers,
+                axum::body::Body::from_stream(stream),
+            )
         } else {
             // Invalid range, return full file
             let file = match File::open(&file_path_buf).await {
@@ -227,7 +242,11 @@ pub async fn serve_file(
                 (axum::http::header::CONTENT_TYPE, content_type),
                 (axum::http::header::CONTENT_LENGTH, file_size.to_string()),
             ];
-            (axum::http::StatusCode::OK, headers, axum::body::Body::from_stream(stream))
+            (
+                axum::http::StatusCode::OK,
+                headers,
+                axum::body::Body::from_stream(stream),
+            )
         }
     } else {
         // No Range header, return full file
@@ -240,7 +259,11 @@ pub async fn serve_file(
             (axum::http::header::CONTENT_TYPE, content_type),
             (axum::http::header::CONTENT_LENGTH, file_size.to_string()),
         ];
-        (axum::http::StatusCode::OK, headers, axum::body::Body::from_stream(stream))
+        (
+            axum::http::StatusCode::OK,
+            headers,
+            axum::body::Body::from_stream(stream),
+        )
     };
 
     let mut response = axum::http::Response::builder()
@@ -334,13 +357,10 @@ pub async fn list_files(
     };
 
     // 查询文件列表
-    let (results, total) = store::member_file::query::Query::list_files_by_member(
-        db,
-        member_id,
-        list_query,
-    )
-    .await
-    .unwrap_or((Vec::new(), 0));
+    let (results, total) =
+        store::member_file::query::Query::list_files_by_member(db, member_id, list_query)
+            .await
+            .unwrap_or((Vec::new(), 0));
 
     // 转换结果
     let files: Vec<FileListItem> = results
@@ -371,8 +391,6 @@ pub async fn list_files(
     })
 }
 
-
-
 /// 触发同步任务的请求
 #[derive(Deserialize)]
 pub struct TriggerSyncRequest {
@@ -395,11 +413,13 @@ pub async fn trigger_sync_files(
     Json(req): Json<TriggerSyncRequest>,
 ) -> Json<TriggerSyncResponse> {
     let member_id = auth.0;
-    
+
     // 确定路径和任务类型
-    let path = req.path.unwrap_or_else(|| state.config.storage.volume.clone());
+    let path = req
+        .path
+        .unwrap_or_else(|| state.config.storage.volume.clone());
     let task_type = req.task_type.as_deref().unwrap_or("sync_files");
-    
+
     // 创建任务负载
     let payload = services::TaskPayload {
         task_type: task_type.to_string(),

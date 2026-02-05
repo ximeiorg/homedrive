@@ -10,9 +10,9 @@ pub struct Model {
     pub id: i64,
     pub message_type: String, // sync_directory, sync_database
     pub progress: i32,        // 0-100
-    pub status: String,      // pending, processing, completed, failed
+    pub status: String,       // pending, processing, completed, failed
     #[sea_orm(column_type = "Text")]
-    pub payload: String,      // JSON payload
+    pub payload: String, // JSON payload
     #[sea_orm(column_type = "Text")]
     pub error_message: Option<String>,
     pub created_at: DateTimeUtc,
@@ -25,8 +25,8 @@ impl ActiveModelBehavior for ActiveModel {}
 /// Enum for sync message types
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SyncMessageType {
-    SyncDirectory,  // 从目录同步到数据库
-    SyncDatabase,   // 从数据库同步到目录
+    SyncDirectory, // 从目录同步到数据库
+    SyncDatabase,  // 从数据库同步到目录
 }
 
 impl SyncMessageType {
