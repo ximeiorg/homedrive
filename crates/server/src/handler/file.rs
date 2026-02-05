@@ -2,11 +2,14 @@ use crate::auth::Auth;
 use crate::error::AppError;
 use crate::state::AppState;
 use axum::{extract::Path, extract::Query, Extension, Json, response::IntoResponse};
+use sea_orm::prelude::DateTimeUtc;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::fs::File;
 use tokio_util::io::ReaderStream;
+
+use store::member_file::query::{ListMemberFilesQuery, SortField, SortOrder, FileTypeFilter};
 
 #[derive(Serialize)]
 pub struct HashCheckResponse {
@@ -212,7 +215,6 @@ pub async fn serve_file(
                 (axum::http::header::CONTENT_LENGTH, content_length.to_string()),
                 (axum::http::header::CONTENT_RANGE, format!("bytes {}-{}/{}", start, end, file_size)),
             ];
-
             (axum::http::StatusCode::PARTIAL_CONTENT, headers, axum::body::Body::from_stream(stream))
         } else {
             // Invalid range, return full file
@@ -251,4 +253,173 @@ pub async fn serve_file(
     }
 
     Ok(response)
+}
+
+/// 文件列表项响应
+#[derive(Serialize)]
+pub struct FileListItem {
+    pub id: i64,
+    pub file_name: String,
+    pub description: String,
+    pub file_size: Option<i64>,
+    pub mime_type: Option<String>,
+    pub created_at: DateTimeUtc,
+    pub updated_at: DateTimeUtc,
+}
+
+/// 文件列表响应
+#[derive(Serialize)]
+pub struct FileListResponse {
+    pub files: Vec<FileListItem>,
+    pub total: u64,
+    pub page: u64,
+    pub page_size: u64,
+    pub total_pages: u64,
+}
+
+/// 列出用户文件的查询参数
+#[derive(Deserialize)]
+pub struct ListFilesQuery {
+    /// 页码，从 1 开始
+    pub page: Option<u64>,
+    /// 每页大小，默认 100
+    pub page_size: Option<u64>,
+    /// 排序字段：created_at, file_name, file_size
+    pub sort_by: Option<String>,
+    /// 排序方向：asc, desc
+    pub sort_order: Option<String>,
+    /// 文件类型：image, video, audio, document, archive, other
+    pub file_type: Option<String>,
+    /// 文件名搜索
+    pub search: Option<String>,
+}
+
+/// 列出当前用户文件 - 需要认证
+pub async fn list_files(
+    Extension(state): Extension<Arc<AppState>>,
+    Extension(auth): Extension<Auth>,
+    Query(query): Query<ListFilesQuery>,
+) -> Json<FileListResponse> {
+    let db = &state.conn;
+    let member_id = auth.0;
+
+    // 转换查询参数
+    let sort_by = query.sort_by.as_ref().map(|s| match s.as_str() {
+        "file_name" => SortField::FileName,
+        "file_size" => SortField::FileSize,
+        _ => SortField::CreatedAt,
+    });
+
+    let sort_order = query.sort_order.as_ref().map(|s| match s.as_str() {
+        "asc" => SortOrder::Asc,
+        _ => SortOrder::Desc,
+    });
+
+    let file_type = query.file_type.as_ref().map(|s| match s.as_str() {
+        "image" => FileTypeFilter::Image,
+        "video" => FileTypeFilter::Video,
+        "audio" => FileTypeFilter::Audio,
+        "document" => FileTypeFilter::Document,
+        "archive" => FileTypeFilter::Archive,
+        _ => FileTypeFilter::Other,
+    });
+
+    let list_query = ListMemberFilesQuery {
+        page: query.page,
+        page_size: query.page_size,
+        sort_by,
+        sort_order,
+        file_type,
+        search: query.search,
+    };
+
+    // 查询文件列表
+    let (results, total) = store::member_file::query::Query::list_files_by_member(
+        db,
+        member_id,
+        list_query,
+    )
+    .await
+    .unwrap_or((Vec::new(), 0));
+
+    // 转换结果
+    let files: Vec<FileListItem> = results
+        .into_iter()
+        .map(|member_file| {
+            FileListItem {
+                id: member_file.id,
+                file_name: member_file.file_name,
+                description: member_file.description,
+                file_size: None, // 需要关联查询获取
+                mime_type: None, // 需要关联查询获取
+                created_at: member_file.created_at,
+                updated_at: member_file.updated_at,
+            }
+        })
+        .collect();
+
+    let page = query.page.unwrap_or(1);
+    let page_size = query.page_size.unwrap_or(100);
+    let total_pages = (total as f64 / page_size as f64).ceil() as u64;
+
+    Json(FileListResponse {
+        files,
+        total,
+        page,
+        page_size,
+        total_pages,
+    })
+}
+
+
+
+/// 触发同步任务的请求
+#[derive(Deserialize)]
+pub struct TriggerSyncRequest {
+    pub path: Option<String>,
+    pub task_type: Option<String>,
+    pub recursive: Option<bool>,
+}
+
+/// 触发同步任务的响应
+#[derive(Serialize)]
+pub struct TriggerSyncResponse {
+    pub success: bool,
+    pub message: String,
+}
+
+/// 触发同步任务 - 需要认证
+pub async fn trigger_sync_files(
+    Extension(state): Extension<Arc<AppState>>,
+    Extension(auth): Extension<Auth>,
+    Json(req): Json<TriggerSyncRequest>,
+) -> Json<TriggerSyncResponse> {
+    let member_id = auth.0;
+    
+    // 确定路径和任务类型
+    let path = req.path.unwrap_or_else(|| state.config.storage.volume.clone());
+    let task_type = req.task_type.as_deref().unwrap_or("sync_files");
+    
+    // 创建任务负载
+    let payload = services::TaskPayload {
+        task_type: task_type.to_string(),
+        member_id,
+        path,
+        options: Some(services::TaskOptions {
+            recursive: req.recursive,
+            file_types: None,
+            include_hidden: Some(false),
+        }),
+    };
+
+    match state.sync_task_sender.send(payload).await {
+        Ok(()) => Json(TriggerSyncResponse {
+            success: true,
+            message: "Task queued successfully".to_string(),
+        }),
+        Err(e) => Json(TriggerSyncResponse {
+            success: false,
+            message: format!("Failed to queue task: {}", e),
+        }),
+    }
 }

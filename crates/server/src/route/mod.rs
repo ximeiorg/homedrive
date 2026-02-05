@@ -13,7 +13,9 @@ use crate::handler::member::{
 
 use crate::handler::file::{
     check_file_hash_exists,
+    list_files,
     serve_file,
+    trigger_sync_files,
     upload_file,
 };
 
@@ -29,6 +31,8 @@ pub fn routes(state: AppState) -> axum::Router<AppState> {
     let file_routes = Router::new()
         .route("/check-hash", get(check_file_hash_exists))
         .route("/upload", post(upload_file).layer(axum::middleware::from_fn(auth_middleware)))
+        .route("/list", get(list_files).layer(axum::middleware::from_fn(auth_middleware)))
+        .route("/sync", post(trigger_sync_files).layer(axum::middleware::from_fn(auth_middleware)))
         .route("/:storage_tag/*path", get(serve_file).layer(axum::middleware::from_fn(auth_middleware)));
 
     // Protected routes - require JWT authentication

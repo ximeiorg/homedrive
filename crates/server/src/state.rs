@@ -11,6 +11,7 @@ pub struct AppState {
     pub(crate) conn: DatabaseConnection,
     pub(crate) storage: Arc<dyn StorageService>,
     pub(crate) config: Arc<AppConfig>,
+    pub(crate) sync_task_sender: services::TaskSenderType,
 }
 
 impl FromRef<AppState> for DatabaseConnection {
@@ -28,5 +29,11 @@ impl FromRef<AppState> for Arc<dyn StorageService> {
 impl FromRef<AppState> for Arc<AppConfig> {
     fn from_ref(state: &AppState) -> Self {
         state.config.clone()
+    }
+}
+
+impl FromRef<AppState> for services::TaskSenderType {
+    fn from_ref(state: &AppState) -> Self {
+        state.sync_task_sender.clone()
     }
 }

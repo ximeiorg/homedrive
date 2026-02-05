@@ -6,6 +6,56 @@ use serde::{Deserialize, Serialize};
 
 use super::super::entity::member_files;
 
+/// 排序字段枚举
+#[derive(Debug, Serialize, Deserialize, Clone, Copy)]
+pub enum SortField {
+    CreatedAt,
+    FileName,
+    FileSize,
+}
+
+/// 排序方向
+#[derive(Debug, Serialize, Deserialize, Clone, Copy)]
+pub enum SortOrder {
+    Asc,
+    Desc,
+}
+
+/// 文件类型过滤器
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub enum FileTypeFilter {
+    Image,
+    Video,
+    Audio,
+    Document,
+    Archive,
+    Other,
+}
+
+impl FileTypeFilter {
+    /// 获取对应的 MIME 类型前缀
+    pub fn get_mime_prefixes(&self) -> Vec<&'static str> {
+        match self {
+            FileTypeFilter::Image => vec!["image/"],
+            FileTypeFilter::Video => vec!["video/"],
+            FileTypeFilter::Audio => vec!["audio/"],
+            FileTypeFilter::Document => vec![
+                "text/",
+                "application/pdf",
+                "application/msword",
+                "application/vnd.openxmlformats-officedocument",
+            ],
+            FileTypeFilter::Archive => vec![
+                "application/zip",
+                "application/x-rar-compressed",
+                "application/x-7z-compressed",
+                "application/gzip",
+            ],
+            FileTypeFilter::Other => vec![],
+        }
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct MemberFileQuery {
     pub id: Option<i64>,
@@ -14,6 +64,23 @@ pub struct MemberFileQuery {
     pub file_name: Option<String>,
     pub page: Option<u64>,
     pub page_size: Option<u64>,
+}
+
+/// 列出用户文件的查询参数
+#[derive(Debug, Default, Serialize, Deserialize)]
+pub struct ListMemberFilesQuery {
+    /// 页码，从 1 开始
+    pub page: Option<u64>,
+    /// 每页大小，默认 100
+    pub page_size: Option<u64>,
+    /// 排序字段
+    pub sort_by: Option<SortField>,
+    /// 排序方向
+    pub sort_order: Option<SortOrder>,
+    /// 文件类型过滤
+    pub file_type: Option<FileTypeFilter>,
+    /// 文件名搜索（模糊匹配）
+    pub search: Option<String>,
 }
 
 pub struct Query;
@@ -145,5 +212,58 @@ impl Query {
             .filter(member_files::Column::Description.like(format!("%{}%", keyword)))
             .all(db)
             .await
+    }
+
+    /// 列出用户文件（支持翻页、排序、类型过滤）
+    pub async fn list_files_by_member(
+        db: &DatabaseConnection,
+        member_id: i64,
+        query: ListMemberFilesQuery,
+    ) -> Result<(Vec<member_files::Model>, u64), sea_orm::DbErr> {
+        let page = query.page.unwrap_or(1);
+        let page_size = query.page_size.unwrap_or(100);
+        let sort_by = query.sort_by.unwrap_or(SortField::CreatedAt);
+        let sort_order = query.sort_order.unwrap_or(SortOrder::Desc);
+
+        // 构建基础查询
+        let mut select = member_files::Entity::find()
+            .filter(member_files::Column::MemberId.eq(member_id));
+
+        // 应用文件名搜索
+        if let Some(ref search) = query.search {
+            select = select.filter(member_files::Column::FileName.like(format!("%{}%", search)));
+        }
+
+        // 应用排序（暂不支持 file_size 排序，因为需要关联查询）
+        match sort_by {
+            SortField::CreatedAt => {
+                match sort_order {
+                    SortOrder::Asc => select = select.order_by_asc(member_files::Column::CreatedAt),
+                    SortOrder::Desc => select = select.order_by_desc(member_files::Column::CreatedAt),
+                }
+            }
+            SortField::FileName => {
+                match sort_order {
+                    SortOrder::Asc => select = select.order_by_asc(member_files::Column::FileName),
+                    SortOrder::Desc => select = select.order_by_desc(member_files::Column::FileName),
+                }
+            }
+            SortField::FileSize => {
+                // 按创建时间降序作为默认（因为没有 file_size 字段的直接访问）
+                match sort_order {
+                    SortOrder::Asc => select = select.order_by_asc(member_files::Column::CreatedAt),
+                    SortOrder::Desc => select = select.order_by_desc(member_files::Column::CreatedAt),
+                }
+            }
+        }
+
+        // 获取总数
+        let total = select.clone().count(db).await?;
+
+        // 分页查询
+        let paginator = select.paginate(db, page_size);
+        let results = paginator.fetch_page(page - 1).await?;
+
+        Ok((results, total))
     }
 }

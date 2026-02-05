@@ -103,9 +103,12 @@ impl StorageService for LocalStorage {
             .map_err(|e| crate::ServiceError::Storage(e.to_string()))
     }
 
-    async fn url(&self, _key: &str) -> Result<String, crate::ServiceError> {
-        // 生成可直接访问的 URL
-        unimplemented!("LocalStorage does not support generating URLs")
+    async fn url(&self, key: &str) -> Result<String, crate::ServiceError> {
+        // 生成可直接访问的 URL 路径
+        // 文件存储在: root/{hash_prefix}/{key}
+        // 访问路径: /api/files/{storage_tag}/{file_path}
+        // 由于 key 的格式是 "{storage_tag}/{file_path}"，直接返回该路径
+        Ok(format!("/api/files/{}", key))
     }
 
     async fn size(&self, key: &str) -> Result<u64, crate::ServiceError> {

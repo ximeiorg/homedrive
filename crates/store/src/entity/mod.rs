@@ -5,3 +5,4 @@ pub mod prelude;
 pub mod file_contents;
 pub mod member_files;
 pub mod members;
+pub mod sync_messages;

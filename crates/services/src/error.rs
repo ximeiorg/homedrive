@@ -44,6 +44,10 @@ pub enum ServiceError {
     /// 未知错误
     #[error("unknown error")]
     Unknown,
+
+    /// 其他错误
+    #[error("other error: {0}")]
+    Other(String),
 }
 
 impl ServiceError {
@@ -54,7 +58,7 @@ impl ServiceError {
             // 业务错误可以直接返回给用户
             Self::MemberNotFound | Self::UsernameExists | Self::InvalidCredentials | Self::InvalidInput(_) | Self::FileNotFound => ErrorCategory::Business,
             // 系统错误需要记录日志
-            Self::Database(_) | Self::Storage(_) | Self::Unknown => ErrorCategory::System,
+            Self::Database(_) | Self::Storage(_) | Self::Unknown | Self::Other(_) => ErrorCategory::System,
         }
     }
 
@@ -67,7 +71,7 @@ impl ServiceError {
     /// 判断是否为系统错误
     #[inline]
     pub fn is_system_error(&self) -> bool {
-        matches!(self, Self::Database(_) | Self::Storage(_) | Self::Unknown)
+        matches!(self, Self::Database(_) | Self::Storage(_) | Self::Unknown | Self::Other(_))
     }
 }
 

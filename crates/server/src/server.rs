@@ -38,10 +38,34 @@ pub async fn start() {
         .await
         .unwrap();
 
+    let conn_arc = Arc::new(conn);
+
+    // 创建任务 channel
+    let (task_sender, _) = services::create_task_channel(100);
+
+    // 创建任务工作器
+    let task_config = services::TaskWorkerConfig {
+        poll_interval_ms: 1000,
+        max_concurrent: 10,
+    };
+
+    // 创建工作器并注册处理器
+    let (mut worker, _) = services::TaskWorker::new(conn_arc.clone(), Some(task_config), 100);
+    
+    // 注册任务处理器
+    worker.register_handler(Arc::new(services::SyncDirectoryHandler::new(config.storage.volume.clone())));
+    worker.register_handler(Arc::new(services::SyncDatabaseHandler::new()));
+
+    // 在后台启动任务工作器
+    tokio::spawn(async move {
+        worker.start().await;
+    });
+
     let shared_state = AppState {
-        conn,
+        conn: (*conn_arc).clone(),
         storage,
         config: Arc::new(config),
+        sync_task_sender: Arc::new(task_sender),
     };
 
     // CORS 配置
