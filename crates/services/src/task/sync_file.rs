@@ -7,6 +7,10 @@ use std::sync::Arc;
 use tokio::fs;
 use tracing::{debug, info, warn};
 
+/// 进度更新节流配置
+const PROGRESS_UPDATE_INTERVAL: usize = 10; // 每处理 10 个文件更新一次进度
+const PROGRESS_UPDATE_MIN_INTERVAL_MS: u64 = 500; // 最小更新间隔 500ms
+
 /// 同步目录处理器
 /// 将 storage 目录下的文件同步到数据库
 pub struct SyncFilesHandler {
@@ -14,11 +18,20 @@ pub struct SyncFilesHandler {
     storage_root: String,
     /// 数据库连接（Arc 包装以支持 Clone）
     conn: Arc<DatabaseConnection>,
+    /// 任务消息 ID（用于进度更新）
+    task_message_id: Option<i64>,
+    /// 进度追踪器
+    progress_tracker: ProgressTracker,
 }
 
 impl SyncFilesHandler {
     pub fn new(storage_root: String, conn: Arc<DatabaseConnection>) -> Self {
-        Self { storage_root, conn }
+        Self {
+            storage_root,
+            conn,
+            task_message_id: None,
+            progress_tracker: ProgressTracker::new(),
+        }
     }
 
     /// 计算文件的 xxhash3 哈希值
@@ -60,6 +73,60 @@ impl SyncFilesHandler {
     }
 }
 
+/// 进度追踪器
+#[derive(Clone, Debug)]
+struct ProgressTracker {
+    /// 已处理文件数
+    processed_count: usize,
+    /// 总文件数（预估）
+    total_count: usize,
+    /// 上次更新时间
+    last_update: std::time::Instant,
+    /// 已跳过的文件数
+    skipped_count: usize,
+}
+
+impl ProgressTracker {
+    fn new() -> Self {
+        Self {
+            processed_count: 0,
+            total_count: 0,
+            last_update: std::time::Instant::now(),
+            skipped_count: 0,
+        }
+    }
+
+    fn increment_processed(&mut self) {
+        self.processed_count += 1;
+    }
+
+    fn increment_skipped(&mut self) {
+        self.skipped_count += 1;
+    }
+
+    fn get_current_count(&self) -> usize {
+        self.processed_count + self.skipped_count
+    }
+
+    fn should_update(&self) -> bool {
+        let elapsed = self.last_update.elapsed().as_millis() as u64;
+        self.get_current_count() % PROGRESS_UPDATE_INTERVAL == 0
+            || elapsed >= PROGRESS_UPDATE_MIN_INTERVAL_MS
+    }
+
+    fn reset_update_time(&mut self) {
+        self.last_update = std::time::Instant::now();
+    }
+
+    fn get_progress(&self) -> i32 {
+        if self.total_count == 0 {
+            return 0;
+        }
+        let current = self.get_current_count();
+        ((current as f64 / self.total_count as f64) * 100.0) as i32
+    }
+}
+
 #[async_trait::async_trait]
 impl TaskHandler for SyncFilesHandler {
     fn task_type(&self) -> &'static str {
@@ -73,15 +140,62 @@ impl TaskHandler for SyncFilesHandler {
     /// 步骤：
     /// 1. 列出 storage_root 下的所有目录（storage_tag）
     /// 2. 查询 storage_tag 对应的用户 id (member_id)
-    /// 3. 对比文件是否在 file_contents 表中存在（通过 hash）
-    /// 4. 对比 member_files 表是否存在记录
-    /// 5. 如果不存在，添加记录到数据表
-    async fn handle(&self, _payload: &TaskPayload) -> Result<()> {
+    /// 3. 预估总文件数并初始化进度
+    /// 4. 对比文件是否在 file_contents 表中存在（通过 hash）
+    /// 5. 对比 member_files 表是否存在记录
+    /// 6. 如果不存在，添加记录到数据表
+    /// 7. 定期更新进度到 task_message 表
+    async fn handle(&self, payload: &TaskPayload) -> Result<()> {
         let storage_root = Path::new(&self.storage_root);
 
         info!("Starting file synchronization from: {}", self.storage_root);
 
-        // 1. 列出 storage_root 下的所有目录（storage_tag）
+        // 设置任务消息 ID
+        let task_message_id = payload.task_message_id;
+
+        // 用于追踪总进度的变量
+        let mut total_files = 0;
+        let _total_dirs = 0;
+
+        // 先估算总文件数（用于进度显示）
+        let mut dir_stack = vec![storage_root.to_path_buf()];
+        while let Some(current_dir) = dir_stack.pop() {
+            if let Ok(mut entries) = fs::read_dir(&current_dir).await {
+                while let Ok(Some(entry)) = entries.next_entry().await {
+                    let entry_path = entry.path();
+                    if entry_path.is_dir() {
+                        dir_stack.push(entry_path);
+                    } else if entry_path.is_file() {
+                        let file_name = entry.file_name().to_string_lossy().to_string();
+                        let file_name_lower = file_name.to_lowercase();
+                        // 跳过隐藏文件和系统文件
+                        if !file_name.starts_with('.')
+                            && file_name_lower != ".ds_store"
+                            && file_name_lower != "thumbs.db"
+                        {
+                            total_files += 1;
+                        }
+                    }
+                }
+            }
+        }
+
+        info!("Estimated total files: {}", total_files);
+
+        // 重置并初始化进度追踪器
+        let mut handler = SyncFilesHandler {
+            storage_root: self.storage_root.clone(),
+            conn: self.conn.clone(),
+            task_message_id,
+            progress_tracker: ProgressTracker {
+                processed_count: 0,
+                total_count: total_files,
+                last_update: std::time::Instant::now(),
+                skipped_count: 0,
+            },
+        };
+
+        // 重新开始遍历
         let mut entries = fs::read_dir(storage_root).await.map_err(|e| {
             crate::ServiceError::Storage(format!("Failed to read storage root directory: {}", e))
         })?;
@@ -103,7 +217,7 @@ impl TaskHandler for SyncFilesHandler {
             // 2. 查询 storage_tag 对应的用户 id (member_id)
             let member = store::entity::members::Entity::find()
                 .filter(store::entity::members::Column::StorageTag.eq(storage_tag.clone()))
-                .one(&*self.conn)
+                .one(&*handler.conn)
                 .await?;
 
             if member.is_none() {
@@ -135,11 +249,14 @@ impl TaskHandler for SyncFilesHandler {
                         dir_stack.push(entry_path);
                     } else if entry_path.is_file() {
                         // 处理文件
-                        self.sync_file(&entry_path, member_id).await?;
+                        handler.sync_file(&entry_path, member_id).await?;
                     }
                 }
             }
         }
+
+        // 最终更新进度到 100%
+        handler.update_progress(100).await?;
 
         info!("File synchronization completed");
         Ok(())
@@ -147,8 +264,28 @@ impl TaskHandler for SyncFilesHandler {
 }
 
 impl SyncFilesHandler {
+    /// 更新进度到数据库
+    async fn update_progress(&self, progress: i32) -> Result<()> {
+        if let Some(task_message_id) = self.task_message_id {
+            let active_model = store::entity::task_messages::ActiveModel {
+                id: sea_orm::Set(task_message_id),
+                progress: sea_orm::Set(progress.clamp(0, 100)),
+                status: sea_orm::Set("processing".to_string()),
+                updated_at: sea_orm::Set(chrono::Utc::now()),
+                ..Default::default()
+            };
+
+            store::entity::task_messages::Entity::update(active_model)
+                .exec(&*self.conn)
+                .await?;
+
+            debug!("Updated progress to {}%", progress);
+        }
+        Ok(())
+    }
+
     /// 同步单个文件
-    async fn sync_file(&self, file_path: &Path, member_id: i64) -> Result<()> {
+    async fn sync_file(&mut self, file_path: &Path, member_id: i64) -> Result<()> {
         let file_name = file_path
             .file_name()
             .and_then(|n| n.to_str())
@@ -163,6 +300,7 @@ impl SyncFilesHandler {
             || file_name_lower == "thumbs.db"
         {
             debug!("Skipping hidden/system file: {:?}", file_path);
+            self.progress_tracker.increment_skipped();
             return Ok(());
         }
 
@@ -257,6 +395,16 @@ impl SyncFilesHandler {
                 "Member file already exists for member: {}, file: {}",
                 member_id, file_name
             );
+        }
+
+        // 更新进度追踪
+        self.progress_tracker.increment_processed();
+
+        // 节流更新进度
+        if self.progress_tracker.should_update() {
+            let progress = self.progress_tracker.get_progress();
+            self.update_progress(progress).await?;
+            self.progress_tracker.reset_update_time();
         }
 
         info!("Synced file: {} (hash: {})", file_name, content_hash);

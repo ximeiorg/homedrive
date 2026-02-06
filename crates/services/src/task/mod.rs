@@ -9,8 +9,8 @@ use chrono::Utc;
 use sea_orm::{QueryOrder, QuerySelect, entity::prelude::*};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
-use store::entity::sync_messages::{
-    ActiveModel, Column, Entity as SyncMessages, Model, SyncStatus as DbSyncStatus,
+use store::entity::task_messages::{
+    ActiveModel, Column, Entity as SyncMessages, Model, TaskStatus as DbSyncStatus,
 };
 use tracing::{debug, error, info};
 
@@ -110,6 +110,8 @@ pub struct TaskPayload {
     pub member_id: i64,
     pub path: String,
     pub options: Option<TaskOptions>,
+    /// 任务消息 ID（用于进度更新）
+    pub task_message_id: Option<i64>,
 }
 
 /// 任务选项
@@ -294,9 +296,17 @@ impl TaskWorker {
                 continue;
             }
 
-            // 解析任务负载
+            // 解析任务负载并设置任务消息 ID
             let payload: Result<TaskPayload> =
                 serde_json::from_str(&task.payload).map_err(|e| ServiceError::Other(e.to_string()));
+
+            let payload = match payload {
+                Ok(mut p) => {
+                    p.task_message_id = Some(task.id);
+                    Ok(p)
+                }
+                Err(e) => Err(e),
+            };
 
             match payload {
                 Ok(p) => match self.process_task(&p).await {

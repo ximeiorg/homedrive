@@ -354,6 +354,7 @@ pub async fn trigger_sync_files(
             file_types: None,
             include_hidden: Some(false),
         }),
+        task_message_id: None,
     };
 
     match state.sync_task_sender.send(payload).await {

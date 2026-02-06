@@ -3,4 +3,4 @@
 pub use super::file_contents::Entity as FileContents;
 pub use super::member_files::Entity as MemberFiles;
 pub use super::members::Entity as Members;
-pub use super::sync_messages::Entity as SyncMessages;
+pub use super::task_messages::Entity as SyncMessages;
