@@ -247,7 +247,7 @@ impl MemberService {
         if !is_empty {
             return Ok(InitAdminResponse {
                 success: false,
-                message: "Admin user already exists".to_string(),
+                message: "You can't do this action".to_string(),
                 member: None,
             });
         }

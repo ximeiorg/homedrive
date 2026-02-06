@@ -13,6 +13,7 @@ impl MigrationTrait for Migration {
                     .table(SyncMessages::Table)
                     .if_not_exists()
                     .col(pk_auto(SyncMessages::Id))
+                    .col(integer(SyncMessages::MemberId).not_null()) // 关联的成员ID
                     .col(string(SyncMessages::MessageType).not_null()) // 消息类型: sync_directory, sync_database
                     .col(integer(SyncMessages::Progress).default(0)) // 进度: 0-100
                     .col(string(SyncMessages::Status).not_null().default("pending")) // 状态: pending, processing, completed, failed
@@ -67,6 +68,7 @@ enum SyncMessages {
     #[iden = "sync_messages"]
     Table,
     Id,
+    MemberId,
     MessageType,
     Progress,
     Status,
