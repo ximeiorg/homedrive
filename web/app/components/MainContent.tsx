@@ -6,9 +6,42 @@ import { getFileList } from "../api";
 interface MediaItem {
   id: string;
   thumbnail: string;
+  videoUrl?: string;
   type: "image" | "video";
   title: string;
   date: string;
+}
+
+// 视频预览组件 - 鼠标悬停时播放
+function VideoThumbnail({ src, poster }: { src?: string; poster?: string }) {
+  const videoRef = React.useRef<HTMLVideoElement>(null);
+  const [isHovered, setIsHovered] = React.useState(false);
+
+  React.useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    if (isHovered) {
+      video.currentTime = 0;
+      video.play().catch(() => {});
+    } else {
+      video.pause();
+    }
+  }, [isHovered]);
+
+  return (
+    <video
+      ref={videoRef}
+      src={src}
+      poster={poster}
+      className="w-full h-full object-cover transition-transform group-hover:scale-105"
+      preload="metadata"
+      playsInline
+      muted
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+    />
+  );
 }
 
 interface MainContentProps {
@@ -33,7 +66,8 @@ export function MainContent({ viewType }: MainContentProps) {
         const mediaItems: MediaItem[] = response.files.map((file) => ({
           id: String(file.id),
           thumbnail: file.url ? `${file.url}?token=${token}` : `https://picsum.photos/seed/${file.id}/400/400`,
-          type: file.file_name.match(/\.(mp4|webm|mov)$/i) ? "video" : "image",
+          videoUrl: file.mime_type?.startsWith("video/") && file.url ? `${file.url}?token=${token}` : undefined,
+          type: file.mime_type?.startsWith("video/") ? "video" : "image",
           title: file.file_name,
           date: new Date(file.created_at).toISOString().split("T")[0],
         }));
@@ -218,11 +252,16 @@ export function MainContent({ viewType }: MainContentProps) {
             >
               <CardBody className="p-0">
                 <div className="relative w-full h-full overflow-hidden">
-                  <img
-                    src={item.thumbnail}
-                    alt={item.title}
-                    className="w-full h-full object-cover transition-transform group-hover:scale-105"
-                  />
+                  {item.type === "video" ? (
+                    <VideoThumbnail src={item.videoUrl} poster={item.thumbnail} />
+                  ) : (
+                    <img
+                      src={item.thumbnail}
+                      alt={item.title}
+                      className="w-full h-full object-cover transition-transform group-hover:scale-105"
+                      loading="lazy"
+                    />
+                  )}
                   {item.type === "video" && (
                     <div className="absolute top-1 right-1 md:top-2 md:right-2">
                       <Chip
@@ -262,11 +301,16 @@ export function MainContent({ viewType }: MainContentProps) {
                   >
                     <CardBody className="p-0">
                       <div className="relative w-full h-full overflow-hidden">
-                        <img
-                          src={item.thumbnail}
-                          alt={item.title}
-                          className="w-full h-full object-cover transition-transform group-hover:scale-105"
-                        />
+                        {item.type === "video" ? (
+                          <VideoThumbnail src={item.videoUrl} poster={item.thumbnail} />
+                        ) : (
+                          <img
+                            src={item.thumbnail}
+                            alt={item.title}
+                            className="w-full h-full object-cover transition-transform group-hover:scale-105"
+                            loading="lazy"
+                          />
+                        )}
                         {item.type === "video" && (
                           <div className="absolute top-1 right-1">
                             <Chip

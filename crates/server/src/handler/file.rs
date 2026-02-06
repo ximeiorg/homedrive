@@ -141,17 +141,10 @@ pub async fn serve_file(
     let storage_root = &state.config.storage.volume;
 
     // Build the file path following LocalStorage's directory structure
-    // LocalStorage uses: root/{hash_prefix}/{storage_tag}/{file_path}
+    // LocalStorage uses: root/{storage_tag}/{file_path}
+    // storage_path already contains: storage_tag/file_path
     let mut file_path_buf = PathBuf::from(storage_root);
-    
-    file_path_buf.push(&storage_tag);
-
-    // Add the file path components
-    for part in file_path.split('/') {
-        if !part.is_empty() {
-            file_path_buf.push(part);
-        }
-    }
+    file_path_buf.push(&file_path);
 
     // Check if file exists
     if !file_path_buf.exists() {

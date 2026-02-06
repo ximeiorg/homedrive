@@ -117,9 +117,11 @@ export async function getFileList(): Promise<{
     id: number;
     file_name: string;
     description: string;
+    file_size: number | null;
+    mime_type: string | null;
+    url: string | null;
     created_at: string;
     updated_at: string;
-    url: string | null;
   }>;
 }> {
   const response = await authFetch(FILES_API);
