@@ -26,6 +26,9 @@ pub fn file_router() -> Router<Arc<AppState>> {
 }
 
 /// 创建静态文件路由
+/// 支持两种格式：
+/// 1. /api/static/{storage_tag}/{*path}?token={token} - URL query 中带 token（用于 img 标签等）
+/// 2. /api/static/{storage_tag}/{*path} - 需要 Authorization header
 pub fn static_router() -> Router<Arc<AppState>> {
     Router::new().route("/{storage_tag}/{*path}", get(serve_file))
 }

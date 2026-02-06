@@ -122,7 +122,7 @@ export async function getFileList(): Promise<{
     url: string | null;
   }>;
 }> {
-  const response = await authFetch(`${FILES_API}/`);
+  const response = await authFetch(FILES_API);
   if (!response.ok) {
     throw new Error("Failed to get file list");
   }

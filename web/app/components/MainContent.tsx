@@ -29,9 +29,10 @@ export function MainContent({ viewType }: MainContentProps) {
         const response = await getFileList();
         
         // 将 API 返回的文件转换为 MediaItem 格式
+        const token = localStorage.getItem("token");
         const mediaItems: MediaItem[] = response.files.map((file) => ({
           id: String(file.id),
-          thumbnail: file.url || `https://picsum.photos/seed/${file.id}/400/400`,
+          thumbnail: file.url ? `${file.url}?token=${token}` : `https://picsum.photos/seed/${file.id}/400/400`,
           type: file.file_name.match(/\.(mp4|webm|mov)$/i) ? "video" : "image",
           title: file.file_name,
           date: new Date(file.created_at).toISOString().split("T")[0],

@@ -220,7 +220,13 @@ impl Query {
         db: &DatabaseConnection,
         member_id: i64,
         query: ListMemberFilesQuery,
-    ) -> Result<(Vec<(member_files::Model, Option<file_contents::Model>)>, u64), sea_orm::DbErr> {
+    ) -> Result<
+        (
+            Vec<(member_files::Model, Option<file_contents::Model>)>,
+            u64,
+        ),
+        sea_orm::DbErr,
+    > {
         let page = query.page.unwrap_or(1);
         let page_size = query.page_size.unwrap_or(100);
         let sort_by = query.sort_by.unwrap_or(SortField::CreatedAt);
@@ -245,14 +251,10 @@ impl Query {
                 SortOrder::Asc => select = select.order_by_asc(member_files::Column::FileName),
                 SortOrder::Desc => select = select.order_by_desc(member_files::Column::FileName),
             },
-            SortField::FileSize => {
-                match sort_order {
-                    SortOrder::Asc => select = select.order_by_asc(member_files::Column::CreatedAt),
-                    SortOrder::Desc => {
-                        select = select.order_by_desc(member_files::Column::CreatedAt)
-                    }
-                }
-            }
+            SortField::FileSize => match sort_order {
+                SortOrder::Asc => select = select.order_by_asc(member_files::Column::CreatedAt),
+                SortOrder::Desc => select = select.order_by_desc(member_files::Column::CreatedAt),
+            },
         }
 
         // 获取总数
@@ -265,7 +267,10 @@ impl Query {
         // 加载关联的 file_contents 信息
         let mut results_with_content = Vec::new();
         for member_file in results {
-            let file_content = member_file.find_related(file_contents::Entity).one(db).await?;
+            let file_content = member_file
+                .find_related(file_contents::Entity)
+                .one(db)
+                .await?;
             results_with_content.push((member_file, file_content));
         }
 

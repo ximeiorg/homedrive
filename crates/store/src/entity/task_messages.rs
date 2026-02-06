@@ -8,9 +8,9 @@ use sea_orm::entity::prelude::*;
 pub struct Model {
     #[sea_orm(primary_key)]
     pub id: i64,
-    pub message_type: String, 
-    pub progress: i32,        // 0-100
-    pub status: String,       // pending, processing, completed, failed
+    pub message_type: String,
+    pub progress: i32,  // 0-100
+    pub status: String, // pending, processing, completed, failed
     #[sea_orm(column_type = "Text")]
     pub payload: String, // JSON payload
     #[sea_orm(column_type = "Text")]

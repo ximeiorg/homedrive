@@ -70,12 +70,27 @@ where
         parts: &mut axum::http::request::Parts,
         _state: &S,
     ) -> Result<Self, Self::Rejection> {
+        // 首先尝试从 Authorization header 获取 token
         let token = parts
             .headers
             .get("authorization")
             .and_then(|h| h.to_str().ok())
-            .and_then(|h| h.strip_prefix("Bearer "))
-            .ok_or(AppError::InvalidCredentials)?;
+            .and_then(|h| h.strip_prefix("Bearer "));
+
+        // 如果 header 中没有 token，尝试从 query 参数获取
+        let token = if let Some(token) = token {
+            token.to_string()
+        } else {
+            // 从 query 参数获取 token: ?token=xxx
+            let query = parts.uri.query().unwrap_or("");
+            let token = query
+                .split('&')
+                .find(|p| p.starts_with("token="))
+                .and_then(|p| p.strip_prefix("token="))
+                .map(|p| urlencoding::decode(p).unwrap_or_else(|_| p.to_string()))
+                .ok_or(AppError::InvalidCredentials)?;
+            token
+        };
 
         let decoding_key = &JWT_SECRET_KEY.1;
 
@@ -85,7 +100,7 @@ where
         validation.set_audience(&["homedrive"]);
 
         let token_data: jsonwebtoken::TokenData<JwtClaims> =
-            decode(token, decoding_key, &validation).map_err(|e| {
+            decode(&token, decoding_key, &validation).map_err(|e| {
                 error!("JWT decode error: {:?}", e);
                 AppError::InvalidCredentials
             })?;

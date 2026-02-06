@@ -6,19 +6,21 @@ mod auth;
 mod file;
 mod member;
 
-pub use auth::auth_router;
-pub use file::{file_router, static_router};
-pub use member::member_router;
-
 use crate::{
     handler::member::{check_members_empty, check_username_exists, init_admin},
     state::AppState,
 };
+pub use auth::auth_router;
 use axum::{
     Router,
     routing::{get, post},
 };
+pub use file::{file_router, static_router};
+use hyper::Method;
+pub use member::member_router;
 use std::sync::Arc;
+use tower_http::cors::Any;
+use tower_http::cors::CorsLayer;
 
 /// 创建应用主路由
 pub fn routes() -> Router<Arc<AppState>> {
@@ -35,4 +37,10 @@ pub fn routes() -> Router<Arc<AppState>> {
         .nest("/static", static_router())
         // 认证模块路由
         .nest("/auth", auth_router())
+        .layer(
+            CorsLayer::new()
+                .allow_origin(Any)
+                .allow_methods([Method::GET, Method::POST, Method::PUT, Method::DELETE])
+                .allow_headers(Any),
+        )
 }

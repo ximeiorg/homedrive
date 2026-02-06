@@ -125,7 +125,6 @@ pub async fn serve_file(
 ) -> impl IntoResponse {
     let db = &state.conn;
     let user_id = auth.0;
-
     // Get user's storage_tag from database
     let user = match store::member::query::Query::find_by_id(db, user_id).await {
         Ok(Some(m)) => m,
@@ -144,9 +143,7 @@ pub async fn serve_file(
     // Build the file path following LocalStorage's directory structure
     // LocalStorage uses: root/{hash_prefix}/{storage_tag}/{file_path}
     let mut file_path_buf = PathBuf::from(storage_root);
-    if storage_tag.len() >= 2 {
-        file_path_buf.push(&storage_tag[0..2]);
-    }
+    
     file_path_buf.push(&storage_tag);
 
     // Add the file path components
