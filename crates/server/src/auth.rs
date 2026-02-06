@@ -1,9 +1,9 @@
 use crate::error::AppError;
 use axum::extract::FromRequestParts;
-use jsonwebtoken::{decode, DecodingKey, EncodingKey, Validation};
+use jsonwebtoken::{DecodingKey, EncodingKey, Validation, decode};
+use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use tracing::error;
-use once_cell::sync::Lazy;
 
 /// JWT Claims
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -36,7 +36,10 @@ where
 {
     type Rejection = AppError;
 
-    async fn from_request_parts(parts: &mut axum::http::request::Parts, _state: &S) -> Result<Self, Self::Rejection> {
+    async fn from_request_parts(
+        parts: &mut axum::http::request::Parts,
+        _state: &S,
+    ) -> Result<Self, Self::Rejection> {
         let claims = JwtClaims::from_request_parts(parts, _state).await?;
         Ok(Authorized(claims.sub))
     }
@@ -46,7 +49,10 @@ where
 pub(crate) static JWT_SECRET_KEY: Lazy<(EncodingKey, DecodingKey)> = Lazy::new(|| {
     let secret = services::get_jwt_secret();
     let secret = secret.as_bytes();
-    (EncodingKey::from_secret(secret), DecodingKey::from_secret(secret))
+    (
+        EncodingKey::from_secret(secret),
+        DecodingKey::from_secret(secret),
+    )
 });
 
 /// 从请求中获取当前用户 ID
@@ -54,34 +60,35 @@ pub fn get_current_user_id(req: &axum::http::Request<axum::body::Body>) -> Optio
     req.extensions().get::<JwtClaims>().map(|c| c.sub)
 }
 
-
 impl<S> FromRequestParts<S> for JwtClaims
 where
     S: Send + Sync,
 {
     type Rejection = AppError;
 
-    async fn from_request_parts(parts: &mut axum::http::request::Parts, _state: &S) -> Result<Self, Self::Rejection> {
+    async fn from_request_parts(
+        parts: &mut axum::http::request::Parts,
+        _state: &S,
+    ) -> Result<Self, Self::Rejection> {
         let token = parts
-        .headers
-        .get("authorization")
-        .and_then(|h| h.to_str().ok())
-        .and_then(|h| h.strip_prefix("Bearer "))
-        .ok_or(AppError::InvalidCredentials)?;
+            .headers
+            .get("authorization")
+            .and_then(|h| h.to_str().ok())
+            .and_then(|h| h.strip_prefix("Bearer "))
+            .ok_or(AppError::InvalidCredentials)?;
 
-    let decoding_key = &JWT_SECRET_KEY.1;
+        let decoding_key = &JWT_SECRET_KEY.1;
 
-    // 验证 audience（与编码时一致）
-    let mut validation = Validation::default();
+        // 验证 audience（与编码时一致）
+        let mut validation = Validation::default();
 
-    validation.set_audience(&["homedrive"]);
+        validation.set_audience(&["homedrive"]);
 
-    let token_data: jsonwebtoken::TokenData<JwtClaims> =
-        decode(token, decoding_key, &validation).map_err(|e| {
-            error!("JWT decode error: {:?}", e);
-            AppError::InvalidCredentials
-        })?;
-
+        let token_data: jsonwebtoken::TokenData<JwtClaims> =
+            decode(token, decoding_key, &validation).map_err(|e| {
+                error!("JWT decode error: {:?}", e);
+                AppError::InvalidCredentials
+            })?;
 
         Ok(token_data.claims)
     }

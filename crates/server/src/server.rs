@@ -58,7 +58,8 @@ pub async fn start() {
     };
 
     // 创建工作器（会自动创建 channel，保存 receiver）
-    let (mut worker, task_sender) = services::TaskWorker::new(conn_arc.clone(), Some(task_config), 100);
+    let (mut worker, task_sender) =
+        services::TaskWorker::new(conn_arc.clone(), Some(task_config), 100);
 
     // 注册任务处理器
     worker.register_handler(Arc::new(services::SyncFilesHandler::new(

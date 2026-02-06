@@ -27,8 +27,5 @@ pub fn file_router() -> Router<Arc<AppState>> {
 
 /// 创建静态文件路由
 pub fn static_router() -> Router<Arc<AppState>> {
-    Router::new().route(
-        "/{storage_tag}/{*path}",
-        get(serve_file),
-    )
+    Router::new().route("/{storage_tag}/{*path}", get(serve_file))
 }

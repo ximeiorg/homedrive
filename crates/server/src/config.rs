@@ -120,7 +120,12 @@ impl AppConfig {
             // 默认配置文件
             .add_source(File::with_name("config.toml").required(false))
             // 环境变量覆盖
-            .add_source(config::Environment::default().prefix("HOMEDRIVE").prefix_separator("_").separator("__"))
+            .add_source(
+                config::Environment::default()
+                    .prefix("HOMEDRIVE")
+                    .prefix_separator("_")
+                    .separator("__"),
+            )
             .build()?;
 
         config.try_deserialize()
@@ -132,8 +137,8 @@ impl AppConfig {
             secret.clone()
         } else {
             // 如果未配置，自动生成并返回
-            let secret = crate::secret::generate_jwt_secret();
-            secret
+
+            crate::secret::generate_jwt_secret()
         }
     }
 }

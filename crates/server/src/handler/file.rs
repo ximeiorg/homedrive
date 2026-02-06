@@ -1,17 +1,17 @@
 use crate::auth::Authorized;
 use crate::error::AppError;
 use crate::state::AppState;
-use axum::{Json, extract::State, extract::Path, extract::Query, response::IntoResponse};
+use axum::{Json, extract::Path, extract::Query, extract::State, response::IntoResponse};
 use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::fs::File;
 use tokio_util::io::ReaderStream;
 
-use store::member_file::query::{FileTypeFilter, ListMemberFilesQuery, SortField, SortOrder};
 use schema::file::{
     HashCheckQuery, HashCheckResponse, ListFilesQuery, TriggerSyncRequest, TriggerSyncResponse,
     UploadFileResponse,
 };
+use store::member_file::query::{FileTypeFilter, ListMemberFilesQuery, SortField, SortOrder};
 
 /// Check if a file hash already exists in the database
 pub async fn check_file_hash_exists(
