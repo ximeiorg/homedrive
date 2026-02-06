@@ -8,10 +8,11 @@ use schema::member::{
     LoginResponse, MemberListResponse, MemberResponse, UpdateAvatarRequest, UpdateMemberRequest,
     UpdatePasswordRequest,
 };
+use std::sync::Arc;
 
 /// 创建新成员
 pub async fn create_member(
-    State(state): State<AppState>,
+    State(state): State<Arc<AppState>>,
     axum::Json(payload): axum::Json<CreateMemberRequest>,
 ) -> crate::error::Result<Json<MemberResponse>> {
     let member = services::MemberService::create_member(&state.conn, payload).await?;
@@ -20,7 +21,7 @@ pub async fn create_member(
 
 /// 获取成员详情
 pub async fn get_member(
-    State(state): State<AppState>,
+    State(state): State<Arc<AppState>>,
     Path(id): Path<i64>,
 ) -> crate::error::Result<Json<MemberResponse>> {
     match services::MemberService::get_member(&state.conn, id).await? {
@@ -34,7 +35,7 @@ pub async fn get_member(
 
 /// 更新成员信息
 pub async fn update_member(
-    State(state): State<AppState>,
+    State(state): State<Arc<AppState>>,
     Path(id): Path<i64>,
     axum::Json(payload): axum::Json<UpdateMemberRequest>,
 ) -> crate::error::Result<Json<MemberResponse>> {
@@ -44,7 +45,7 @@ pub async fn update_member(
 
 /// 删除成员
 pub async fn delete_member(
-    State(state): State<AppState>,
+    State(state): State<Arc<AppState>>,
     Path(id): Path<i64>,
 ) -> crate::error::Result<Json<()>> {
     services::MemberService::delete_member(&state.conn, id).await?;
@@ -53,7 +54,7 @@ pub async fn delete_member(
 
 /// 获取成员列表
 pub async fn list_members(
-    State(state): State<AppState>,
+    State(state): State<Arc<AppState>>,
     Query(query): Query<ListMembersQuery>,
 ) -> crate::error::Result<Json<MemberListResponse>> {
     let members =
@@ -63,7 +64,7 @@ pub async fn list_members(
 
 /// 根据用户名查询成员
 pub async fn get_member_by_username(
-    State(state): State<AppState>,
+    State(state): State<Arc<AppState>>,
     Path(username): Path<String>,
 ) -> crate::error::Result<Json<MemberResponse>> {
     match services::MemberService::get_member_by_username(&state.conn, &username).await? {
@@ -77,7 +78,7 @@ pub async fn get_member_by_username(
 
 /// 检查用户名是否存在
 pub async fn check_username_exists(
-    State(state): State<AppState>,
+    State(state): State<Arc<AppState>>,
     Path(username): Path<String>,
 ) -> crate::error::Result<Json<bool>> {
     let exists = services::MemberService::username_exists(&state.conn, &username).await?;
@@ -86,7 +87,7 @@ pub async fn check_username_exists(
 
 /// 更新成员头像
 pub async fn update_member_avatar(
-    State(state): State<AppState>,
+    State(state): State<Arc<AppState>>,
     Path(id): Path<i64>,
     axum::Json(payload): axum::Json<UpdateAvatarRequest>,
 ) -> crate::error::Result<Json<MemberResponse>> {
@@ -96,7 +97,7 @@ pub async fn update_member_avatar(
 
 /// 更新成员密码
 pub async fn update_member_password(
-    State(state): State<AppState>,
+    State(state): State<Arc<AppState>>,
     Path(id): Path<i64>,
     axum::Json(payload): axum::Json<UpdatePasswordRequest>,
 ) -> crate::error::Result<Json<MemberResponse>> {
@@ -107,7 +108,7 @@ pub async fn update_member_password(
 
 /// 登录
 pub async fn login(
-    State(state): State<AppState>,
+    State(state): State<Arc<AppState>>,
     axum::Json(payload): axum::Json<LoginRequest>,
 ) -> crate::error::Result<Json<LoginResponse>> {
     let login_response = services::MemberService::login(&state.conn, payload).await?;
@@ -116,7 +117,7 @@ pub async fn login(
 
 /// 检查 member 表是否为空（无需认证）
 pub async fn check_members_empty(
-    State(state): State<AppState>,
+    State(state): State<Arc<AppState>>,
 ) -> crate::error::Result<Json<schema::member::IsEmptyResponse>> {
     let response = services::MemberService::is_empty(&state.conn).await?;
     Ok(Json(response))
@@ -124,7 +125,7 @@ pub async fn check_members_empty(
 
 /// 初始化管理员（无需认证，仅当 member 表为空时有效）
 pub async fn init_admin(
-    State(state): State<AppState>,
+    State(state): State<Arc<AppState>>,
     axum::Json(payload): axum::Json<InitAdminRequest>,
 ) -> crate::error::Result<Json<InitAdminResponse>> {
     let response = services::MemberService::init_admin(&state.conn, payload).await?;

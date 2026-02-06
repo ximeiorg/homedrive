@@ -1,25 +1,17 @@
-use crate::auth::{Auth, JwtClaims};
+use crate::auth::Authorized;
 use crate::error::AppError;
 use crate::state::AppState;
 use axum::{Json, extract::State, extract::Path, extract::Query, response::IntoResponse};
-use sea_orm::prelude::DateTimeUtc;
-use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::fs::File;
 use tokio_util::io::ReaderStream;
 
 use store::member_file::query::{FileTypeFilter, ListMemberFilesQuery, SortField, SortOrder};
-
-#[derive(Serialize)]
-pub struct HashCheckResponse {
-    pub exists: bool,
-}
-
-#[derive(Deserialize)]
-pub struct HashCheckQuery {
-    pub hash: String,
-}
+use schema::file::{
+    HashCheckQuery, HashCheckResponse, ListFilesQuery, TriggerSyncRequest, TriggerSyncResponse,
+    UploadFileResponse,
+};
 
 /// Check if a file hash already exists in the database
 pub async fn check_file_hash_exists(
@@ -35,24 +27,10 @@ pub async fn check_file_hash_exists(
     Json(HashCheckResponse { exists })
 }
 
-/// Upload file request
-#[derive(Deserialize)]
-pub struct UploadFileRequest {
-    pub hash: String,
-}
-
-/// Upload file response
-#[derive(Serialize)]
-pub struct UploadFileResponse {
-    pub success: bool,
-    pub file_id: i64,
-    pub message: String,
-}
-
 /// Upload file handler - requires authentication
 pub async fn upload_file(
     State(state): State<Arc<AppState>>,
-    Extension(auth): Extension<Auth>,
+    auth: Authorized,
     mut multipart: axum::extract::Multipart,
 ) -> Json<UploadFileResponse> {
     let db = &state.conn;
@@ -141,12 +119,12 @@ fn parse_range_header(range: &str, file_size: u64) -> Option<(u64, u64)> {
 /// Path format: /files/{storage_tag}/{file_path}
 pub async fn serve_file(
     State(state): State<Arc<AppState>>,
-    cls: JwtClaims,
+    auth: Authorized,
     Path((storage_tag, file_path)): Path<(String, String)>,
     req: axum::http::Request<axum::body::Body>,
 ) -> impl IntoResponse {
     let db = &state.conn;
-    let user_id = cls.sub;
+    let user_id = auth.0;
 
     // Get user's storage_tag from database
     let user = match store::member::query::Query::find_by_id(db, user_id).await {
@@ -278,51 +256,14 @@ pub async fn serve_file(
     Ok(response)
 }
 
-/// 文件列表项响应
-#[derive(Serialize)]
-pub struct FileListItem {
-    pub id: i64,
-    pub file_name: String,
-    pub description: String,
-    pub file_size: Option<i64>,
-    pub mime_type: Option<String>,
-    pub created_at: DateTimeUtc,
-    pub updated_at: DateTimeUtc,
-}
-
-/// 文件列表响应
-#[derive(Serialize)]
-pub struct FileListResponse {
-    pub files: Vec<FileListItem>,
-    pub total: u64,
-    pub page: u64,
-    pub page_size: u64,
-    pub total_pages: u64,
-}
-
-/// 列出用户文件的查询参数
-#[derive(Deserialize)]
-pub struct ListFilesQuery {
-    /// 页码，从 1 开始
-    pub page: Option<u64>,
-    /// 每页大小，默认 100
-    pub page_size: Option<u64>,
-    /// 排序字段：created_at, file_name, file_size
-    pub sort_by: Option<String>,
-    /// 排序方向：asc, desc
-    pub sort_order: Option<String>,
-    /// 文件类型：image, video, audio, document, archive, other
-    pub file_type: Option<String>,
-    /// 文件名搜索
-    pub search: Option<String>,
-}
-
 /// 列出当前用户文件 - 需要认证
 pub async fn list_files(
-    Extension(state): Extension<Arc<AppState>>,
-    Extension(auth): Extension<Auth>,
+    State(state): State<Arc<AppState>>,
+    auth: Authorized,
     Query(query): Query<ListFilesQuery>,
-) -> Json<FileListResponse> {
+) -> Json<schema::file::FileListResponse> {
+    use schema::file::FileListItem;
+
     let db = &state.conn;
     let member_id = auth.0;
 
@@ -382,7 +323,7 @@ pub async fn list_files(
     let page_size = query.page_size.unwrap_or(100);
     let total_pages = (total as f64 / page_size as f64).ceil() as u64;
 
-    Json(FileListResponse {
+    Json(schema::file::FileListResponse {
         files,
         total,
         page,
@@ -391,29 +332,12 @@ pub async fn list_files(
     })
 }
 
-/// 触发同步任务的请求
-#[derive(Deserialize)]
-pub struct TriggerSyncRequest {
-    pub path: Option<String>,
-    pub task_type: Option<String>,
-    pub recursive: Option<bool>,
-}
-
-/// 触发同步任务的响应
-#[derive(Serialize)]
-pub struct TriggerSyncResponse {
-    pub success: bool,
-    pub message: String,
-}
-
 /// 触发同步任务 - 需要认证
 pub async fn trigger_sync_files(
-    Extension(state): Extension<Arc<AppState>>,
-    Extension(auth): Extension<Auth>,
+    State(state): State<Arc<AppState>>,
+    Authorized(member_id): Authorized,
     Json(req): Json<TriggerSyncRequest>,
 ) -> Json<TriggerSyncResponse> {
-    let member_id = auth.0;
-
     // 确定路径和任务类型
     let path = req
         .path
@@ -426,7 +350,7 @@ pub async fn trigger_sync_files(
         member_id,
         path,
         options: Some(services::TaskOptions {
-            recursive: req.recursive,
+            recursive: Some(true),
             file_types: None,
             include_hidden: Some(false),
         }),

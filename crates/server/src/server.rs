@@ -51,20 +51,17 @@ pub async fn start() {
 
     let conn_arc = Arc::new(conn);
 
-    // 创建任务 channel
-    let (task_sender, _) = services::create_task_channel(100);
-
-    // 创建任务工作器
+    // 创建任务工作器配置
     let task_config = services::TaskWorkerConfig {
         poll_interval_ms: 1000,
         max_concurrent: 10,
     };
 
-    // 创建工作器并注册处理器
-    let (mut worker, _) = services::TaskWorker::new(conn_arc.clone(), Some(task_config), 100);
+    // 创建工作器（会自动创建 channel，保存 receiver）
+    let (mut worker, task_sender) = services::TaskWorker::new(conn_arc.clone(), Some(task_config), 100);
 
     // 注册任务处理器
-    worker.register_handler(Arc::new(services::SyncDirectoryHandler::new(
+    worker.register_handler(Arc::new(services::SyncFilesHandler::new(
         config.storage.volume.clone(),
         conn_arc.clone(),
     )));
@@ -74,12 +71,12 @@ pub async fn start() {
         worker.start().await;
     });
 
-    let shared_state = AppState {
+    let shared_state = Arc::new(AppState {
         conn: (*conn_arc).clone(),
         storage,
         config: Arc::new(config),
-        sync_task_sender: Arc::new(task_sender),
-    };
+        sync_task_sender: Arc::new(services::TaskSender::new(task_sender)),
+    });
 
     // CORS 配置
     let cors_layer = CorsLayer::new()
@@ -88,7 +85,7 @@ pub async fn start() {
         .allow_headers(Any);
 
     let app = Router::new()
-        .nest("/api", routes(shared_state.clone()))
+        .nest("/api", routes())
         .layer(cors_layer)
         .with_state(shared_state)
         .fallback(index_handler);

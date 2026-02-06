@@ -16,7 +16,7 @@ use tracing::{debug, error, info};
 
 pub(crate) mod sync_file;
 
-pub use sync_file::SyncDirectoryHandler;
+pub use sync_file::SyncFilesHandler;
 
 // SyncDatabaseHandler 待实现
 #[derive(Clone)]
@@ -225,7 +225,7 @@ impl TaskWorker {
                     match message {
                         TaskMessage::NewTask(payload) => {
                             if let Err(e) = self.process_task(&payload).await {
-                                error!("处理任务失败: {}", e);
+                                error!("处理任务失败: {}, payload={:?}", e, payload);
                             }
                         }
                         TaskMessage::Shutdown => {

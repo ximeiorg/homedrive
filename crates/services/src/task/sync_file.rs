@@ -9,14 +9,14 @@ use tracing::{debug, info, warn};
 
 /// 同步目录处理器
 /// 将 storage 目录下的文件同步到数据库
-pub struct SyncDirectoryHandler {
+pub struct SyncFilesHandler {
     /// 存储根目录
     storage_root: String,
     /// 数据库连接（Arc 包装以支持 Clone）
     conn: Arc<DatabaseConnection>,
 }
 
-impl SyncDirectoryHandler {
+impl SyncFilesHandler {
     pub fn new(storage_root: String, conn: Arc<DatabaseConnection>) -> Self {
         Self { storage_root, conn }
     }
@@ -61,9 +61,9 @@ impl SyncDirectoryHandler {
 }
 
 #[async_trait::async_trait]
-impl TaskHandler for SyncDirectoryHandler {
+impl TaskHandler for SyncFilesHandler {
     fn task_type(&self) -> &'static str {
-        "sync_directory"
+        "sync_files"
     }
 
     /// 处理任务
@@ -146,7 +146,7 @@ impl TaskHandler for SyncDirectoryHandler {
     }
 }
 
-impl SyncDirectoryHandler {
+impl SyncFilesHandler {
     /// 同步单个文件
     async fn sync_file(&self, file_path: &Path, member_id: i64) -> Result<()> {
         let file_name = file_path

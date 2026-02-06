@@ -117,10 +117,10 @@ impl AppConfig {
 
         let config = Config::builder()
             .add_source(MemorySource::new())
-            // 环境变量覆盖
-            .add_source(config::Environment::default().prefix("HOMEDRIVE_"))
             // 默认配置文件
             .add_source(File::with_name("config.toml").required(false))
+            // 环境变量覆盖
+            .add_source(config::Environment::default().prefix("HOMEDRIVE").prefix_separator("_").separator("__"))
             .build()?;
 
         config.try_deserialize()

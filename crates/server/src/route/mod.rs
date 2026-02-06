@@ -18,9 +18,10 @@ use axum::{
     Router,
     routing::{get, post},
 };
+use std::sync::Arc;
 
 /// 创建应用主路由
-pub fn routes(state: AppState) -> Router<AppState> {
+pub fn routes() -> Router<Arc<AppState>> {
     Router::new()
         // 公开路由
         .route("/username/{username}/exists", get(check_username_exists))
@@ -34,5 +35,4 @@ pub fn routes(state: AppState) -> Router<AppState> {
         .nest("/static", static_router())
         // 认证模块路由
         .nest("/auth", auth_router())
-        .with_state(state)
 }

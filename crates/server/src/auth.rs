@@ -1,14 +1,9 @@
 use crate::error::AppError;
-use axum::{
-    extract::{FromRequestParts, Request},
-    http::request::Parts,
-    middleware::Next,
-    response::Response,
-    RequestPartsExt, 
-};
-use jsonwebtoken::{decode, DecodingKey, EncodingKey, Header, Validation};
+use axum::extract::FromRequestParts;
+use jsonwebtoken::{decode, DecodingKey, EncodingKey, Validation};
 use serde::{Deserialize, Serialize};
 use tracing::error;
+use once_cell::sync::Lazy;
 
 /// JWT Claims
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -20,6 +15,33 @@ pub struct JwtClaims {
     pub iat: u64,
 }
 
+/// Auth 包装器，用于从请求中提取用户 ID
+#[derive(Clone)]
+pub struct Auth(pub i64);
+
+impl From<JwtClaims> for Auth {
+    fn from(claims: JwtClaims) -> Self {
+        Auth(claims.sub)
+    }
+}
+
+/// 已认证用户提取器
+/// 自动从 JWT Claims 中提取用户 ID，handler 只需使用此类型
+#[derive(Clone, Debug)]
+pub struct Authorized(pub i64);
+
+impl<S> FromRequestParts<S> for Authorized
+where
+    S: Send + Sync,
+{
+    type Rejection = AppError;
+
+    async fn from_request_parts(parts: &mut axum::http::request::Parts, _state: &S) -> Result<Self, Self::Rejection> {
+        let claims = JwtClaims::from_request_parts(parts, _state).await?;
+        Ok(Authorized(claims.sub))
+    }
+}
+
 /// JWT 密钥管理
 pub(crate) static JWT_SECRET_KEY: Lazy<(EncodingKey, DecodingKey)> = Lazy::new(|| {
     let secret = services::get_jwt_secret();
@@ -28,7 +50,7 @@ pub(crate) static JWT_SECRET_KEY: Lazy<(EncodingKey, DecodingKey)> = Lazy::new(|
 });
 
 /// 从请求中获取当前用户 ID
-pub fn get_current_user_id(req: &Request) -> Option<i64> {
+pub fn get_current_user_id(req: &axum::http::Request<axum::body::Body>) -> Option<i64> {
     req.extensions().get::<JwtClaims>().map(|c| c.sub)
 }
 
@@ -39,7 +61,7 @@ where
 {
     type Rejection = AppError;
 
-    async fn from_request_parts(parts: &mut Parts, _state: &S) -> Result<Self, Self::Rejection> {
+    async fn from_request_parts(parts: &mut axum::http::request::Parts, _state: &S) -> Result<Self, Self::Rejection> {
         let token = parts
         .headers
         .get("authorization")
@@ -51,6 +73,7 @@ where
 
     // 验证 audience（与编码时一致）
     let mut validation = Validation::default();
+
     validation.set_audience(&["homedrive"]);
 
     let token_data: jsonwebtoken::TokenData<JwtClaims> =
