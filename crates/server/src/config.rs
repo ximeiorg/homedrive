@@ -12,6 +12,13 @@ pub struct AppConfig {
     pub jwt: JwtConfig,
     /// 数据库配置
     pub database: DatabaseConfig,
+    /// 基础 URL（用于生成文件访问链接）
+    #[serde(default = "default_base_url")]
+    pub base_url: String,
+}
+
+fn default_base_url() -> String {
+    "http://localhost:2300".to_string()
 }
 
 /// 服务器配置

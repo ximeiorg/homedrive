@@ -1,5 +1,5 @@
-import React, { useState } from "react";
-import { Link } from "react-router";
+import React, { useState, useEffect } from "react";
+import { Link, useNavigate } from "react-router";
 import {
   Card,
   CardHeader,
@@ -17,6 +17,7 @@ import {
 } from "@heroui/react";
 import { Settings, Clock, Trash2 } from "lucide-react";
 import { useMediaQuery } from "~/hooks/useMediaQuery";
+import { useAuth } from "../auth-context";
 
 // Edit icon SVG
 const EditIcon = ({ className }: { className?: string }) => (
@@ -432,6 +433,27 @@ function MobileTaskCard({ task }: { task: Task }) {
 export default function SettingsPage() {
   const [currentTab, setCurrentTab] = useState("overview");
   const isMobile = useMediaQuery("(max-width: 768px)");
+  const { isAuthenticated } = useAuth();
+  const navigate = useNavigate();
+
+  // 客户端登录检查
+  useEffect(() => {
+    if (!isAuthenticated) {
+      navigate("/login", { replace: true });
+    }
+  }, [isAuthenticated, navigate]);
+
+  // 未登录时不显示内容（会被重定向）
+  if (!isAuthenticated) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin" />
+          <p className="text-default-500">正在检查登录状态...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-default-50 p-4 md:p-6">

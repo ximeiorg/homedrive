@@ -1,6 +1,7 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Card, CardBody, Button, ButtonGroup, Select, SelectItem, Chip } from "@heroui/react";
 import { Grid3X3, List, Plus, Upload, Filter } from "lucide-react";
+import { getFileList } from "../api";
 
 interface MediaItem {
   id: string;
@@ -14,29 +15,40 @@ interface MainContentProps {
   viewType: string;
 }
 
-// Demo data - Using fixed dates to avoid hydration mismatch
-const demoMedia: MediaItem[] = Array.from({ length: 24 }, (_, i) => ({
-  id: `media-${i}`,
-  thumbnail: `https://picsum.photos/seed/${i + 1}/400/400`,
-  type: i % 5 === 0 ? "video" : "image",
-  title: `Photo ${i + 1}`,
-  date: `2024-01-${String(i + 1).padStart(2, '0')}`,
-}));
-
-// Group media items by date
-const groupMediaByDate = (items: MediaItem[]) => {
-  const groups: Record<string, MediaItem[]> = {};
-  items.forEach((item) => {
-    if (!groups[item.date]) {
-      groups[item.date] = [];
-    }
-    groups[item.date].push(item);
-  });
-  return Object.entries(groups).sort((a, b) => b[0].localeCompare(a[0]));
-};
-
 export function MainContent({ viewType }: MainContentProps) {
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
+  const [files, setFiles] = useState<MediaItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  // 获取文件列表
+  useEffect(() => {
+    const fetchFiles = async () => {
+      try {
+        setLoading(true);
+        const response = await getFileList();
+        
+        // 将 API 返回的文件转换为 MediaItem 格式
+        const mediaItems: MediaItem[] = response.files.map((file) => ({
+          id: String(file.id),
+          thumbnail: file.url || `https://picsum.photos/seed/${file.id}/400/400`,
+          type: file.file_name.match(/\.(mp4|webm|mov)$/i) ? "video" : "image",
+          title: file.file_name,
+          date: new Date(file.created_at).toISOString().split("T")[0],
+        }));
+        
+        setFiles(mediaItems);
+        setError(null);
+      } catch (err) {
+        console.error("Failed to fetch files:", err);
+        setError("Failed to load files");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchFiles();
+  }, [viewType]);
 
   const getTitle = () => {
     const titles: Record<string, string> = {
@@ -53,6 +65,59 @@ export function MainContent({ viewType }: MainContentProps) {
     return titles[viewType] || "媒体库";
   };
 
+  // Group media items by date
+  const groupMediaByDate = (items: MediaItem[]) => {
+    const groups: Record<string, MediaItem[]> = {};
+    items.forEach((item) => {
+      if (!groups[item.date]) {
+        groups[item.date] = [];
+      }
+      groups[item.date].push(item);
+    });
+    return Object.entries(groups).sort((a, b) => b[0].localeCompare(a[0]));
+  };
+
+  // 加载状态
+  if (loading) {
+    return (
+      <main
+        className={cn(
+          "overflow-y-auto bg-default-50 transition-all duration-300",
+          "fixed left-0 right-0",
+          "md:left-64",
+          "top-16 bottom-0 md:bottom-0",
+          "p-4 md:p-6",
+          "pb-24 md:pb-6"
+        )}
+      >
+        <div className="flex flex-col items-center justify-center h-full">
+          <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin" />
+          <p className="text-default-500 mt-4">加载中...</p>
+        </div>
+      </main>
+    );
+  }
+
+  // 错误状态
+  if (error) {
+    return (
+      <main
+        className={cn(
+          "overflow-y-auto bg-default-50 transition-all duration-300",
+          "fixed left-0 right-0",
+          "md:left-64",
+          "top-16 bottom-0 md:bottom-0",
+          "p-4 md:p-6",
+          "pb-24 md:pb-6"
+        )}
+      >
+        <div className="flex flex-col items-center justify-center h-full">
+          <p className="text-danger">{error}</p>
+        </div>
+      </main>
+    );
+  }
+
   return (
     <main
       className={cn(
@@ -68,7 +133,7 @@ export function MainContent({ viewType }: MainContentProps) {
       <div className="flex items-center justify-between mb-4">
         <div>
           <h1 className="text-xl font-bold text-foreground">{getTitle()}</h1>
-          <p className="text-sm text-default-500 mt-1">{demoMedia.length} 个项目</p>
+          <p className="text-sm text-default-500 mt-1">{files.length} 个项目</p>
         </div>
         
         <div className="flex items-center gap-2">
@@ -128,10 +193,22 @@ export function MainContent({ viewType }: MainContentProps) {
         </Select>
       </div>
 
-      {/* Media Grid */}
-      {viewMode === "grid" ? (
+      {/* Empty State */}
+      {files.length === 0 ? (
+        <div className="flex flex-col items-center justify-center h-64 text-center">
+          <div className="w-16 h-16 md:w-24 md:h-24 rounded-full bg-default-100 flex items-center justify-center mb-4">
+            <Upload className="w-8 h-8 md:w-10 md:h-10 text-default-400" />
+          </div>
+          <h3 className="text-base md:text-lg font-medium mb-2">还没有媒体文件</h3>
+          <p className="text-sm text-default-500 mb-4">上传你的第一张照片或视频</p>
+          <Button color="primary" size="sm" startContent={<Plus className="w-4 h-4" />}>
+            选择文件上传
+          </Button>
+        </div>
+      ) : viewMode === "grid" ? (
+        /* Grid View */
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2 md:gap-4">
-          {demoMedia.map((item) => (
+          {files.map((item) => (
             <Card
               key={item.id}
               isPressable
@@ -164,8 +241,9 @@ export function MainContent({ viewType }: MainContentProps) {
           ))}
         </div>
       ) : (
+        /* List View */
         <div className="space-y-6">
-          {groupMediaByDate(demoMedia).map(([date, items]) => (
+          {groupMediaByDate(files).map(([date, items]) => (
             <div key={date}>
               {/* Date Header */}
               <div className="sticky top-0 z-10 bg-default-50/95 backdrop-blur-sm py-2 mb-3">
@@ -208,20 +286,6 @@ export function MainContent({ viewType }: MainContentProps) {
               </div>
             </div>
           ))}
-        </div>
-      )}
-
-      {/* Empty State */}
-      {demoMedia.length === 0 && (
-        <div className="flex flex-col items-center justify-center h-64 text-center">
-          <div className="w-16 h-16 md:w-24 md:h-24 rounded-full bg-default-100 flex items-center justify-center mb-4">
-            <Upload className="w-8 h-8 md:w-10 md:h-10 text-default-400" />
-          </div>
-          <h3 className="text-base md:text-lg font-medium mb-2">还没有媒体文件</h3>
-          <p className="text-sm text-default-500 mb-4">上传你的第一张照片或视频</p>
-          <Button color="primary" size="sm" startContent={<Plus className="w-4 h-4" />}>
-            选择文件上传
-          </Button>
         </div>
       )}
     </main>

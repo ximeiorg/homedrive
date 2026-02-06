@@ -2,14 +2,16 @@ import { useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 import { Button, Card, CardBody, CardHeader, Input, Alert } from "@heroui/react";
 import { login, type LoginRequest } from "../api";
+import { useAuth } from "../auth-context";
 
-export function Login() {
+export default function Login() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const { login: authLogin } = useAuth();
 
   const redirectTo = searchParams.get("redirect") || "/";
 
@@ -25,9 +27,8 @@ export function Login() {
         password,
       } as LoginRequest);
 
-      // 保存 token
-      localStorage.setItem("token", response.token);
-      localStorage.setItem("member", JSON.stringify(response.member));
+      // 使用 auth context 保存登录状态
+      authLogin(response.token, response.member);
 
       // 跳转到目标页面
       navigate(redirectTo);

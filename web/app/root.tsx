@@ -10,6 +10,8 @@ import {
 import type { Route } from "./+types/root";
 import "./app.css";
 import { HeroUIProvider } from "@heroui/react";
+import { AuthProvider } from "./auth-context";
+
 export const links: Route.LinksFunction = () => [
   { rel: "preconnect", href: "https://fonts.googleapis.com" },
   {
@@ -43,8 +45,24 @@ export function Layout({ children }: { children: React.ReactNode }) {
   );
 }
 
+// SPA 模式的 hydration fallback
+export function HydrateFallback() {
+  return (
+    <div className="min-h-screen flex items-center justify-center">
+      <div className="flex flex-col items-center gap-4">
+        <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin" />
+        <p className="text-default-500">加载中...</p>
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
-  return <Outlet />;
+  return (
+    <AuthProvider>
+      <Outlet />
+    </AuthProvider>
+  );
 }
 
 export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {

@@ -1,10 +1,10 @@
 use sea_orm::{
-    ColumnTrait, DatabaseConnection, EntityTrait, PaginatorTrait, QueryFilter, QueryOrder,
-    QuerySelect,
+    ColumnTrait, DatabaseConnection, EntityTrait, ModelTrait, PaginatorTrait, QueryFilter,
+    QueryOrder, QuerySelect,
 };
 use serde::{Deserialize, Serialize};
 
-use super::super::entity::member_files;
+use super::super::entity::{file_contents, member_files};
 
 /// 排序字段枚举
 #[derive(Debug, Serialize, Deserialize, Clone, Copy)]
@@ -215,11 +215,12 @@ impl Query {
     }
 
     /// 列出用户文件（支持翻页、排序、类型过滤）
+    /// 返回包含 file_contents 信息的元组 (member_files, file_contents)
     pub async fn list_files_by_member(
         db: &DatabaseConnection,
         member_id: i64,
         query: ListMemberFilesQuery,
-    ) -> Result<(Vec<member_files::Model>, u64), sea_orm::DbErr> {
+    ) -> Result<(Vec<(member_files::Model, Option<file_contents::Model>)>, u64), sea_orm::DbErr> {
         let page = query.page.unwrap_or(1);
         let page_size = query.page_size.unwrap_or(100);
         let sort_by = query.sort_by.unwrap_or(SortField::CreatedAt);
@@ -234,7 +235,7 @@ impl Query {
             select = select.filter(member_files::Column::FileName.like(format!("%{}%", search)));
         }
 
-        // 应用排序（暂不支持 file_size 排序，因为需要关联查询）
+        // 应用排序
         match sort_by {
             SortField::CreatedAt => match sort_order {
                 SortOrder::Asc => select = select.order_by_asc(member_files::Column::CreatedAt),
@@ -245,7 +246,6 @@ impl Query {
                 SortOrder::Desc => select = select.order_by_desc(member_files::Column::FileName),
             },
             SortField::FileSize => {
-                // 按创建时间降序作为默认（因为没有 file_size 字段的直接访问）
                 match sort_order {
                     SortOrder::Asc => select = select.order_by_asc(member_files::Column::CreatedAt),
                     SortOrder::Desc => {
@@ -262,6 +262,13 @@ impl Query {
         let paginator = select.paginate(db, page_size);
         let results = paginator.fetch_page(page - 1).await?;
 
-        Ok((results, total))
+        // 加载关联的 file_contents 信息
+        let mut results_with_content = Vec::new();
+        for member_file in results {
+            let file_content = member_file.find_related(file_contents::Entity).one(db).await?;
+            results_with_content.push((member_file, file_content));
+        }
+
+        Ok((results_with_content, total))
     }
 }

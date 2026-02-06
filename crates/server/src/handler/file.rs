@@ -259,13 +259,12 @@ pub async fn serve_file(
 /// 列出当前用户文件 - 需要认证
 pub async fn list_files(
     State(state): State<Arc<AppState>>,
-    auth: Authorized,
+    Authorized(member_id): Authorized,
     Query(query): Query<ListFilesQuery>,
 ) -> Json<schema::file::FileListResponse> {
     use schema::file::FileListItem;
 
     let db = &state.conn;
-    let member_id = auth.0;
 
     // 转换查询参数
     let sort_by = query.sort_by.as_ref().map(|s| match s.as_str() {
@@ -303,16 +302,39 @@ pub async fn list_files(
             .await
             .unwrap_or((Vec::new(), 0));
 
+    // 获取 base_url 用于构建文件访问 URL
+    let base_url = state.config.base_url.clone();
+
     // 转换结果
     let files: Vec<FileListItem> = results
         .into_iter()
-        .map(|member_file| {
+        .map(|(member_file, file_content)| {
+            // 从 file_content 获取 storage_path 和 mime_type
+            // storage_path 格式: storage_tag/file_path
+            // 静态文件路由: /api/static/{storage_tag}/{*path}
+            let (storage_path, mime_type, file_size) = match file_content {
+                Some(ref fc) => (
+                    fc.storage_path.clone(),
+                    Some(fc.mime_type.clone()),
+                    Some(fc.file_size),
+                ),
+                None => (String::new(), None, None),
+            };
+
+            // 构建文件访问 URL: {base_url}/api/static/{storage_path}
+            let url = if storage_path.is_empty() {
+                None
+            } else {
+                Some(format!("{}/api/static/{}", base_url, storage_path))
+            };
+
             FileListItem {
                 id: member_file.id,
                 file_name: member_file.file_name,
                 description: member_file.description,
-                file_size: None, // 需要关联查询获取
-                mime_type: None, // 需要关联查询获取
+                file_size,
+                mime_type,
+                url,
                 created_at: member_file.created_at,
                 updated_at: member_file.updated_at,
             }

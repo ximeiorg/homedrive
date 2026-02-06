@@ -21,7 +21,7 @@ pub fn file_router() -> Router<Arc<AppState>> {
         .route("/check-hash", get(check_file_hash_exists))
         // 受保护路由（使用 FromRequestParts 自动认证）
         .route("/upload", post(upload_file))
-        .route("/list", get(list_files))
+        .route("/", get(list_files))
         .route("/sync", post(trigger_sync_files))
 }
 

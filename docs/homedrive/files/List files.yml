@@ -1,17 +1,11 @@
 info:
-  name: file_sync
+  name: List files
   type: http
   seq: 2
 
 http:
-  method: POST
-  url: "{{host}}/api/files/sync"
-  body:
-    type: json
-    data: |-
-      {
-      "task_type":"sync_files"
-      }
+  method: GET
+  url: "{{host}}/api/files"
   auth:
     type: bearer
     token: "{{jwt_token}}"

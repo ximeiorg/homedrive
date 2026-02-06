@@ -1,6 +1,8 @@
 import React from "react";
 import { Avatar, Input, Dropdown, DropdownTrigger, DropdownMenu, DropdownItem, Button } from "@heroui/react";
 import { Search, Settings, LogOut, User, Menu, Upload } from "lucide-react";
+import { useAuth } from "../auth-context";
+import { useNavigate } from "react-router";
 
 interface TopBarProps {
   onMenuClick?: () => void;
@@ -8,6 +10,23 @@ interface TopBarProps {
 }
 
 export function TopBar({ onMenuClick, onUploadClick }: TopBarProps) {
+  const { member, logout } = useAuth();
+  const navigate = useNavigate();
+
+  const handleLogout = () => {
+    logout();
+    navigate("/login");
+  };
+
+  // 获取用户名首字母作为头像
+  const getInitials = (name: string) => {
+    return name.charAt(0).toUpperCase();
+  };
+
+  // 获取头像 URL（如果 member.avatar 为 null 则使用首字母）
+  const avatarUrl = member?.avatar || undefined;
+  const initials = member?.avatar ? undefined : getInitials(member?.username || "U");
+
   return (
     <header className="fixed top-0 left-0 right-0 h-16 bg-background/80 backdrop-blur-md border-b border-divider z-50 px-4 flex items-center justify-between">
       {/* Left: Logo & Menu Button */}
@@ -74,19 +93,25 @@ export function TopBar({ onMenuClick, onUploadClick }: TopBarProps) {
               <Avatar
                 isBordered
                 color="primary"
-                src="https://i.pravatar.cc/150?u=a042581f4e29026024d"
+                src={avatarUrl}
+                name={initials}
                 size="sm"
               />
             </Button>
           </DropdownTrigger>
           <DropdownMenu aria-label="User menu" variant="flat">
             <DropdownItem key="profile" startContent={<User className="w-4 h-4" />}>
-              个人信息
+              {member?.username || "用户"}
             </DropdownItem>
             <DropdownItem key="settings" startContent={<Settings className="w-4 h-4" />}>
               设置
             </DropdownItem>
-            <DropdownItem key="logout" color="danger" startContent={<LogOut className="w-4 h-4" />}>
+            <DropdownItem 
+              key="logout" 
+              color="danger" 
+              startContent={<LogOut className="w-4 h-4" />}
+              onPress={handleLogout}
+            >
               退出登录
             </DropdownItem>
           </DropdownMenu>
