@@ -3,6 +3,7 @@ use crate::{ServiceError, StorageService};
 use chrono::Utc;
 use std::sync::Arc;
 use store::DatabaseConnection;
+use store::member_file::query::{FileTypeFilter, ListMemberFilesQuery, SortField, SortOrder};
 
 /// 文件上传响应
 #[derive(Debug, serde::Serialize)]
@@ -125,5 +126,52 @@ impl FileService {
             .ok_or(ServiceError::FileNotFound)?;
 
         storage.url(&file.storage_path).await
+    }
+
+    /// 列出用户文件（支持翻页、排序、类型过滤）
+    pub async fn list_member_files(
+        db: &DatabaseConnection,
+        member_id: i64,
+        page: Option<u64>,
+        page_size: Option<u64>,
+        sort_by: Option<String>,
+        sort_order: Option<String>,
+        file_type: Option<String>,
+        search: Option<String>,
+    ) -> Result<(Vec<(store::entity::member_files::Model, Option<store::entity::file_contents::Model>)>, u64)> {
+        // 转换排序参数
+        let sort_by = sort_by.as_ref().map(|s| match s.as_str() {
+            "file_name" => SortField::FileName,
+            "file_size" => SortField::FileSize,
+            _ => SortField::CreatedAt,
+        });
+
+        let sort_order = sort_order.as_ref().map(|s| match s.as_str() {
+            "asc" => SortOrder::Asc,
+            _ => SortOrder::Desc,
+        });
+
+        // 转换文件类型参数
+        let file_type = file_type.as_ref().map(|s| match s.as_str() {
+            "image" => FileTypeFilter::Image,
+            "video" => FileTypeFilter::Video,
+            "audio" => FileTypeFilter::Audio,
+            "document" => FileTypeFilter::Document,
+            "archive" => FileTypeFilter::Archive,
+            _ => FileTypeFilter::Other,
+        });
+
+        let list_query = ListMemberFilesQuery {
+            page,
+            page_size,
+            sort_by,
+            sort_order,
+            file_type,
+            search,
+        };
+
+        store::member_file::query::Query::list_files_by_member(db, member_id, list_query)
+            .await
+            .map_err(ServiceError::Database)
     }
 }

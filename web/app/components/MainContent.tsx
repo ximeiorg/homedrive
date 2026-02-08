@@ -83,7 +83,24 @@ export function MainContent({ viewType }: MainContentProps) {
     const fetchFiles = async () => {
       try {
         setLoading(true);
-        const response = await getFileList();
+        
+        // 将 viewType 转换为后端 file_type 参数
+        let fileTypeParam: string | undefined;
+        switch (viewType) {
+          case "videos":
+            fileTypeParam = "video";
+            break;
+          case "photos":
+          case "gifs":
+          case "live-photos":
+            fileTypeParam = "image";
+            break;
+          default:
+            // gallery, shared, favorites, recent, trash 不传 type，获取所有类型
+            fileTypeParam = undefined;
+        }
+        
+        const response = await getFileList(fileTypeParam);
         
         // 将 API 返回的文件转换为 MediaItem 格式
         const token = localStorage.getItem("token");

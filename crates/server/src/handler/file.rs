@@ -258,43 +258,19 @@ pub async fn list_files(
 ) -> Json<schema::file::FileListResponse> {
     use schema::file::FileListItem;
 
-    let db = &state.conn;
-
-    // 转换查询参数
-    let sort_by = query.sort_by.as_ref().map(|s| match s.as_str() {
-        "file_name" => SortField::FileName,
-        "file_size" => SortField::FileSize,
-        _ => SortField::CreatedAt,
-    });
-
-    let sort_order = query.sort_order.as_ref().map(|s| match s.as_str() {
-        "asc" => SortOrder::Asc,
-        _ => SortOrder::Desc,
-    });
-
-    let file_type = query.file_type.as_ref().map(|s| match s.as_str() {
-        "image" => FileTypeFilter::Image,
-        "video" => FileTypeFilter::Video,
-        "audio" => FileTypeFilter::Audio,
-        "document" => FileTypeFilter::Document,
-        "archive" => FileTypeFilter::Archive,
-        _ => FileTypeFilter::Other,
-    });
-
-    let list_query = ListMemberFilesQuery {
-        page: query.page,
-        page_size: query.page_size,
-        sort_by,
-        sort_order,
-        file_type,
-        search: query.search,
-    };
-
-    // 查询文件列表
-    let (results, total) =
-        store::member_file::query::Query::list_files_by_member(db, member_id, list_query)
-            .await
-            .unwrap_or((Vec::new(), 0));
+    // 通过 services 层查询文件列表
+    let (results, total) = services::FileService::list_member_files(
+        &state.conn,
+        member_id,
+        query.page,
+        query.page_size,
+        query.sort_by,
+        query.sort_order,
+        query.file_type,
+        query.search,
+    )
+    .await
+    .unwrap_or((Vec::new(), 0));
 
     // 获取 base_url 用于构建文件访问 URL
     let base_url = state.config.base_url.clone();
