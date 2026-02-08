@@ -5,9 +5,11 @@
 mod auth;
 mod file;
 mod member;
+mod task;
 
 use crate::{
     handler::member::{check_members_empty, check_username_exists, init_admin},
+    handler::system::get_system_stats,
     state::AppState,
 };
 pub use auth::auth_router;
@@ -18,6 +20,7 @@ use axum::{
 pub use file::{file_router, static_router};
 use hyper::Method;
 pub use member::member_router;
+pub use task::task_router;
 use std::sync::Arc;
 use tower_http::cors::Any;
 use tower_http::cors::CorsLayer;
@@ -29,10 +32,14 @@ pub fn routes() -> Router<Arc<AppState>> {
         .route("/username/{username}/exists", get(check_username_exists))
         .route("/empty", get(check_members_empty))
         .route("/init", post(init_admin))
+        // 系统状态路由（公开）
+        .route("/system/stats", get(get_system_stats))
         // 成员模块路由（需要认证）
         .nest("/members", member_router())
         // 文件模块路由
         .nest("/files", file_router())
+        // 任务模块路由
+        .nest("/tasks", task_router())
         // 静态文件路由
         .nest("/static", static_router())
         // 认证模块路由

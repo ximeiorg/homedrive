@@ -2,14 +2,16 @@ use crate::auth::Authorized;
 use crate::error::AppError;
 use crate::state::AppState;
 use axum::{Json, extract::Path, extract::Query, extract::State, response::IntoResponse};
+use chrono::Utc;
+use sea_orm::{EntityTrait, QueryOrder};
 use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::fs::File;
 use tokio_util::io::ReaderStream;
 
 use schema::file::{
-    HashCheckQuery, HashCheckResponse, ListFilesQuery, TriggerSyncRequest, TriggerSyncResponse,
-    UploadFileResponse,
+    HashCheckQuery, HashCheckResponse, ListFilesQuery, SyncFilesRequest, SyncFilesResponse,
+    TaskListResponse, TaskItemResponse, TriggerSyncRequest, TriggerSyncResponse, UploadFileResponse,
 };
 use store::member_file::query::{FileTypeFilter, ListMemberFilesQuery, SortField, SortOrder};
 
@@ -378,5 +380,179 @@ pub async fn trigger_sync_files(
             success: false,
             message: format!("Failed to queue task: {}", e),
         }),
+    }
+}
+
+/// 获取任务列表 - 需要认证
+pub async fn list_tasks(
+    State(state): State<Arc<AppState>>,
+    Authorized(_member_id): Authorized,
+) -> Json<TaskListResponse> {
+    use sea_orm::{EntityTrait, QuerySelect};
+    use store::entity::task_messages::{Column, Entity as TaskMessages};
+    
+    let db = &state.conn;
+
+    // 查询最近的任务，按创建时间倒序
+    let tasks = TaskMessages::find()
+        .order_by_desc(Column::CreatedAt)
+        .limit(50)
+        .all(db)
+        .await
+        .unwrap_or_else(|_| Vec::new());
+
+    // 转换为响应格式
+    let task_items: Vec<TaskItemResponse> = tasks
+        .into_iter()
+        .map(|task| {
+            let message = task.error_message.clone().unwrap_or_else(|| {
+                match task.status.as_str() {
+                    "pending" => "等待处理".to_string(),
+                    "processing" => "处理中".to_string(),
+                    "completed" => "已完成".to_string(),
+                    "failed" => "处理失败".to_string(),
+                    _ => "未知状态".to_string(),
+                }
+            });
+
+            TaskItemResponse {
+                id: task.id,
+                task_type: task.message_type,
+                status: task.status,
+                progress: task.progress.clamp(0, 100),
+                message,
+                created_at: task.created_at,
+                updated_at: task.updated_at,
+                completed_at: task.completed_at,
+            }
+        })
+        .collect();
+
+    Json(TaskListResponse { tasks: task_items })
+}
+
+/// 获取单个任务详情 - 需要认证
+pub async fn get_task(
+    State(state): State<Arc<AppState>>,
+    Authorized(_member_id): Authorized,
+    Path(id): Path<i64>,
+) -> Result<Json<TaskItemResponse>, AppError> {
+    use sea_orm::EntityTrait;
+    use store::entity::prelude::SyncMessages;
+    
+    let db = &state.conn;
+
+    let task = SyncMessages::find_by_id(id)
+        .one(db)
+        .await
+        .map_err(|_| AppError::NotFound)?;
+
+    match task {
+        Some(t) => {
+            let message = t.error_message.clone().unwrap_or_else(|| {
+                match t.status.as_str() {
+                    "pending" => "等待处理".to_string(),
+                    "processing" => "处理中".to_string(),
+                    "completed" => "已完成".to_string(),
+                    "failed" => "处理失败".to_string(),
+                    _ => "未知状态".to_string(),
+                }
+            });
+
+            Ok(Json(TaskItemResponse {
+                id: t.id,
+                task_type: t.message_type,
+                status: t.status,
+                progress: t.progress.clamp(0, 100),
+                message,
+                created_at: t.created_at,
+                updated_at: t.updated_at,
+                completed_at: t.completed_at,
+            }))
+        }
+        None => Err(AppError::NotFound),
+    }
+}
+
+/// 同步文件信息 - 需要认证
+/// 创建任务并将任务记录保存到数据库
+pub async fn sync_files(
+    State(state): State<Arc<AppState>>,
+    Authorized(member_id): Authorized,
+    Json(req): Json<SyncFilesRequest>,
+) -> Json<SyncFilesResponse> {
+    use sea_orm::{ActiveModelTrait, EntityTrait, Set};
+    use store::entity::prelude::SyncMessages;
+    use store::entity::task_messages::TaskStatus;
+    use tracing::error;
+    
+    let db = &state.conn;
+    let storage_root = state.config.storage.volume.clone();
+
+    // 创建任务负载
+    let payload = services::TaskPayload {
+        task_type: "sync_files".to_string(),
+        member_id,
+        path: req.path.unwrap_or_else(|| storage_root.clone()),
+        options: Some(services::TaskOptions {
+            recursive: Some(true),
+            file_types: None,
+            include_hidden: Some(false),
+        }),
+        task_message_id: None,
+    };
+
+    // 将任务负载序列化为 JSON
+    let payload_json = serde_json::to_string(&payload)
+        .map_err(|e| services::ServiceError::Other(e.to_string()))
+        .unwrap_or_else(|_| "{}".to_string());
+
+    // 创建任务消息记录
+    let task_message = store::entity::task_messages::ActiveModel {
+        member_id: Set(member_id),
+        message_type: Set("sync_files".to_string()),
+        status: Set(TaskStatus::Pending.as_str().to_string()),
+        progress: Set(0),
+        payload: Set(payload_json),
+        error_message: Set(None),
+        created_at: Set(Utc::now()),
+        updated_at: Set(Utc::now()),
+        completed_at: Set(None),
+        ..Default::default()
+    };
+
+    // 保存到数据库
+    let result = task_message.insert(db).await;
+
+    match result {
+        Ok(task) => {
+            // 发送任务到任务队列
+            let mut payload = payload;
+            payload.task_message_id = Some(task.id);
+            
+            match state.sync_task_sender.send(payload).await {
+                Ok(()) => Json(SyncFilesResponse {
+                    success: true,
+                    task_id: task.id,
+                    message: "同步任务已创建".to_string(),
+                }),
+                Err(e) => {
+                    error!("任务已创建但发送到队列失败: {}", e);
+                    Json(SyncFilesResponse {
+                        success: false,
+                        task_id: task.id,
+                        message: "任务已创建但发送到队列失败".to_string(),
+                    })
+                }
+            }
+        }
+        Err(e) => {
+            error!("创建同步任务失败: {}", e);
+            Json(SyncFilesResponse {
+                success: false,
+                task_id: 0,
+                message: "创建同步任务失败".to_string(),
+            })
+        }
     }
 }

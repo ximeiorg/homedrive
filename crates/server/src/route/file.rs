@@ -4,7 +4,8 @@
 
 use crate::{
     handler::file::{
-        check_file_hash_exists, list_files, serve_file, trigger_sync_files, upload_file,
+        check_file_hash_exists, list_files, serve_file, 
+        sync_files, upload_file,
     },
     state::AppState,
 };
@@ -22,7 +23,7 @@ pub fn file_router() -> Router<Arc<AppState>> {
         // 受保护路由（使用 FromRequestParts 自动认证）
         .route("/upload", post(upload_file))
         .route("/", get(list_files))
-        .route("/sync", post(trigger_sync_files))
+        .route("/sync", post(sync_files))
 }
 
 /// 创建静态文件路由

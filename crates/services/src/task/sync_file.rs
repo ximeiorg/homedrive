@@ -258,6 +258,9 @@ impl TaskHandler for SyncFilesHandler {
         // 最终更新进度到 100%
         handler.update_progress(100).await?;
 
+        // 更新任务状态为完成
+        handler.update_status("completed").await?;
+
         info!("File synchronization completed");
         Ok(())
     }
@@ -280,6 +283,27 @@ impl SyncFilesHandler {
                 .await?;
 
             debug!("Updated progress to {}%", progress);
+        }
+        Ok(())
+    }
+
+    /// 更新任务状态到数据库
+    async fn update_status(&self, status: &str) -> Result<()> {
+        if let Some(task_message_id) = self.task_message_id {
+            let active_model = store::entity::task_messages::ActiveModel {
+                id: sea_orm::Set(task_message_id),
+                status: sea_orm::Set(status.to_string()),
+                progress: sea_orm::Set(100),
+                updated_at: sea_orm::Set(chrono::Utc::now()),
+                completed_at: sea_orm::Set(Some(chrono::Utc::now())),
+                ..Default::default()
+            };
+
+            store::entity::task_messages::Entity::update(active_model)
+                .exec(&*self.conn)
+                .await?;
+
+            debug!("Updated status to {}", status);
         }
         Ok(())
     }

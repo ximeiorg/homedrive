@@ -14,10 +14,18 @@ import {
   Switch,
   Select,
   SelectItem,
+  Input,
+  Modal,
+  ModalContent,
+  ModalHeader,
+  ModalBody,
+  ModalFooter,
+  useDisclosure,
 } from "@heroui/react";
 import { Settings, Clock, Trash2 } from "lucide-react";
 import { useMediaQuery } from "~/hooks/useMediaQuery";
 import { useAuth } from "../auth-context";
+import { getTaskList, syncFiles, type TaskItem, type TaskStatus, getMemberList, type MemberResponse, getSystemStats, type SystemStats } from "../api";
 
 // Edit icon SVG
 const EditIcon = ({ className }: { className?: string }) => (
@@ -177,113 +185,27 @@ interface User {
   status: "online" | "offline" | "away";
 }
 
-interface Task {
-  id: string;
-  name: string;
-  type: "upload" | "download" | "process" | "sync";
-  status: "pending" | "processing" | "completed" | "failed";
-  progress: number;
-  createdAt: string;
-  size?: string;
-}
-
-// Mock data
-const serverStats = {
-  status: "online" as const,
-  uptime: "15天 4小时 32分钟",
-  cpu: 45,
-  memory: 62,
-  disk: {
-    used: 256,
-    total: 1024,
-    percentage: 25,
-  },
-  network: {
-    upload: "125 MB/s",
-    download: "340 MB/s",
-  },
+// 格式化运行时间（秒 -> 天数/小时/分钟）
+const formatUptime = (seconds: number) => {
+  const days = Math.floor(seconds / 86400);
+  const hours = Math.floor((seconds % 86400) / 3600);
+  const mins = Math.floor((seconds % 3600) / 60);
+  if (days > 0) {
+    return `${days}天 ${hours}小时`;
+  }
+  return `${hours}小时 ${mins}分钟`;
 };
 
-const users: User[] = [
-  {
-    id: "1",
-    name: "管理员",
-    email: "admin@homedrive.local",
-    role: "admin",
-    storageUsed: 15.2,
-    storageTotal: 100,
-    lastActive: "刚刚",
-    status: "online",
-  },
-  {
-    id: "2",
-    name: "张三",
-    email: "zhangsan@example.com",
-    role: "member",
-    storageUsed: 8.5,
-    storageTotal: 50,
-    lastActive: "5分钟前",
-    status: "online",
-  },
-  {
-    id: "3",
-    name: "李四",
-    email: "lisi@example.com",
-    role: "member",
-    storageUsed: 2.3,
-    storageTotal: 20,
-    lastActive: "2小时前",
-    status: "away",
-  },
-  {
-    id: "4",
-    name: "王五",
-    email: "wangwu@example.com",
-    role: "member",
-    storageUsed: 0,
-    storageTotal: 10,
-    lastActive: "3天前",
-    status: "offline",
-  },
-];
-
-const tasks: Task[] = [
-  {
-    id: "1",
-    name: "批量上传照片",
-    type: "upload",
-    status: "processing",
-    progress: 67,
-    createdAt: "10分钟前",
-    size: "1.2 GB",
-  },
-  {
-    id: "2",
-    name: "同步备份",
-    type: "sync",
-    status: "pending",
-    progress: 0,
-    createdAt: "刚刚",
-  },
-  {
-    id: "3",
-    name: "视频转码",
-    type: "process",
-    status: "completed",
-    progress: 100,
-    createdAt: "1小时前",
-    size: "256 MB",
-  },
-  {
-    id: "4",
-    name: "下载归档",
-    type: "download",
-    status: "failed",
-    progress: 45,
-    createdAt: "2小时前",
-    size: "512 MB",
-  },
-];
+// 格式化字节为MB/GB
+const formatBytes = (bytes: number) => {
+  if (bytes >= 1073741824) {
+    return `${(bytes / 1073741824).toFixed(2)} GB`;
+  }
+  if (bytes >= 1048576) {
+    return `${(bytes / 1048576).toFixed(2)} MB`;
+  }
+  return `${(bytes / 1024).toFixed(2)} KB`;
+};
 
 const settings = {
   maxFileSize: 1024,
@@ -296,15 +218,32 @@ const settings = {
   twoFactorAuth: false,
 };
 
-// Mobile User Card Component
-function MobileUserCard({ user }: { user: User }) {
+// Mobile User Card Component - API Version
+function MobileUserCard({ user }: { user: MemberResponse }) {
+  const storageUsedGB = user.storage_used / 1024 / 1024 / 1024;
+  const storageTotalGB = user.storage_total / 1024 / 1024 / 1024;
+  const storagePercent = (user.storage_used / user.storage_total) * 100;
+
+  const formatLastActive = () => {
+    if (!user.last_active) return "从未活跃";
+    const date = new Date(user.last_active);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+
+    if (diffMins < 1) return "刚刚";
+    if (diffMins < 60) return `${diffMins}分钟前`;
+    if (diffMins < 1440) return `${Math.floor(diffMins / 60)}小时前`;
+    return `${Math.floor(diffMins / 1440)}天前`;
+  };
+
   return (
     <Card className="mb-3">
       <CardBody>
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-3">
             <Avatar
-              name={user.name}
+              name={user.username}
               size="md"
               isBordered
               color={
@@ -316,24 +255,24 @@ function MobileUserCard({ user }: { user: User }) {
               }
             />
             <div>
-              <p className="font-medium">{user.name}</p>
-              <p className="text-xs text-default-500">{user.email}</p>
+              <p className="font-medium">{user.username}</p>
+              <p className="text-xs text-default-500">ID: {user.id}</p>
             </div>
           </div>
           <Chip
             size="sm"
-            color={user.role === "admin" ? "primary" : "default"}
+            color={user.id === 1 ? "primary" : "default"}
             variant="flat"
           >
-            {user.role === "admin" ? "管理员" : "成员"}
+            {user.id === 1 ? "管理员" : "成员"}
           </Chip>
         </div>
         <div className="flex items-center justify-between text-sm mb-2">
           <span className="text-default-500">存储</span>
-          <span>{user.storageUsed} / {user.storageTotal} GB</span>
+          <span>{storageUsedGB.toFixed(2)} / {storageTotalGB.toFixed(0)} GB</span>
         </div>
         <Progress
-          value={(user.storageUsed / user.storageTotal) * 100}
+          value={storagePercent}
           size="sm"
           color="primary"
           className="mb-3"
@@ -346,15 +285,17 @@ function MobileUserCard({ user }: { user: User }) {
             <span className="text-sm text-default-500">
               {user.status === "online" ? "在线" : user.status === "away" ? "离开" : "离线"}
             </span>
-            <span className="text-sm text-default-400">· {user.lastActive}</span>
+            <span className="text-sm text-default-400">· {formatLastActive()}</span>
           </div>
           <div className="flex gap-1">
             <Button isIconOnly size="sm" variant="light">
               <EditIcon className="w-4 h-4" />
             </Button>
-            <Button isIconOnly size="sm" variant="light" color="danger">
-              <Trash2 className="w-4 h-4" />
-            </Button>
+            {user.id !== 1 && (
+              <Button isIconOnly size="sm" variant="light" color="danger">
+                <Trash2 className="w-4 h-4" />
+              </Button>
+            )}
           </div>
         </div>
       </CardBody>
@@ -362,22 +303,31 @@ function MobileUserCard({ user }: { user: User }) {
   );
 }
 
-// Mobile Task Card Component
-function MobileTaskCard({ task }: { task: Task }) {
+// Mobile Task Card Component - API Version
+function MobileTaskCard({ task }: { task: TaskItem }) {
+  const formatDate = (dateStr: string) => {
+    try {
+      const date = new Date(dateStr);
+      return date.toLocaleString("zh-CN");
+    } catch {
+      return dateStr;
+    }
+  };
+
   return (
     <Card className="mb-3">
       <CardBody>
         <div className="flex items-start justify-between mb-3">
           <div className="flex items-center gap-3">
             <div className="p-2 rounded-lg bg-default-100">
-              {task.type === "upload" && <UploadIcon className="w-5 h-5 text-primary" />}
-              {task.type === "download" && <DownloadIcon className="w-5 h-5 text-success" />}
-              {task.type === "process" && <ProcessIcon className="w-5 h-5 text-warning" />}
-              {task.type === "sync" && <SyncIcon className="w-5 h-5 text-secondary" />}
+              {task.task_type === "upload" && <UploadIcon className="w-5 h-5 text-primary" />}
+              {task.task_type === "download" && <DownloadIcon className="w-5 h-5 text-success" />}
+              {task.task_type === "process" && <ProcessIcon className="w-5 h-5 text-warning" />}
+              {(task.task_type === "sync" || task.task_type === "sync_files") && <SyncIcon className="w-5 h-5 text-secondary" />}
             </div>
             <div>
-              <p className="font-medium">{task.name}</p>
-              <p className="text-xs text-default-500">{task.createdAt}</p>
+              <p className="font-medium">{task.message || "同步文件任务"}</p>
+              <p className="text-xs text-default-500">{formatDate(task.created_at)}</p>
             </div>
           </div>
           <Chip
@@ -418,8 +368,8 @@ function MobileTaskCard({ task }: { task: Task }) {
           className="mb-2"
         />
         <div className="flex items-center justify-between">
-          <span className="text-sm text-default-500">{task.size || "-"}</span>
-          {task.status !== "completed" && (
+          <span className="text-sm text-default-500">ID: {task.id}</span>
+          {task.status !== "completed" && task.status !== "failed" && (
             <Button size="sm" color="danger" variant="flat">
               取消
             </Button>
@@ -435,6 +385,15 @@ export default function SettingsPage() {
   const isMobile = useMediaQuery("(max-width: 768px)");
   const { isAuthenticated } = useAuth();
   const navigate = useNavigate();
+  const { isOpen, onOpen, onClose } = useDisclosure();
+  const [syncPath, setSyncPath] = useState("");
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [syncMessage, setSyncMessage] = useState("");
+  const [tasks, setTasks] = useState<TaskItem[]>([]);
+  const [isLoadingTasks, setIsLoadingTasks] = useState(false);
+  const [members, setMembers] = useState<MemberResponse[]>([]);
+  const [isLoadingMembers, setIsLoadingMembers] = useState(false);
+  const [serverStats, setServerStats] = useState<SystemStats | null>(null);
 
   // 客户端登录检查
   useEffect(() => {
@@ -442,6 +401,99 @@ export default function SettingsPage() {
       navigate("/login", { replace: true });
     }
   }, [isAuthenticated, navigate]);
+
+  // 获取系统状态
+  const fetchServerStats = async () => {
+    try {
+      const stats = await getSystemStats();
+      setServerStats(stats);
+    } catch (error) {
+      console.error("获取系统状态失败:", error);
+    }
+  };
+
+  // 初始加载系统状态
+  useEffect(() => {
+    fetchServerStats();
+    // 定期刷新状态（每30秒）
+    const interval = setInterval(fetchServerStats, 30000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // 获取成员列表
+  const fetchMembers = async () => {
+    if (!isAuthenticated) return;
+    setIsLoadingMembers(true);
+    try {
+      const response = await getMemberList();
+      setMembers(response.members);
+    } catch (error) {
+      console.error("获取成员列表失败:", error);
+    } finally {
+      setIsLoadingMembers(false);
+    }
+  };
+
+  // 当切换到用户Tab时获取成员列表
+  useEffect(() => {
+    if (currentTab === "users" && isAuthenticated) {
+      fetchMembers();
+    }
+  }, [currentTab, isAuthenticated]);
+
+  // 获取任务列表
+  const fetchTasks = async () => {
+    if (!isAuthenticated) return;
+    setIsLoadingTasks(true);
+    try {
+      const response = await getTaskList();
+      setTasks(response.tasks);
+    } catch (error) {
+      console.error("获取任务列表失败:", error);
+    } finally {
+      setIsLoadingTasks(false);
+    }
+  };
+
+  // 当切换到任务Tab时获取任务列表
+  useEffect(() => {
+    if (currentTab === "tasks" && isAuthenticated) {
+      fetchTasks();
+    }
+  }, [currentTab, isAuthenticated]);
+
+  // 定期刷新任务状态（当有处理中的任务时）
+  useEffect(() => {
+    const hasProcessingTask = tasks.some((t) => t.status === "processing" || t.status === "pending");
+    if (!hasProcessingTask) return;
+
+    const interval = setInterval(() => {
+      fetchTasks();
+    }, 5000);
+
+    return () => clearInterval(interval);
+  }, [tasks]);
+
+  // 处理同步文件
+  const handleSync = async () => {
+    setIsSyncing(true);
+    setSyncMessage("");
+    try {
+      const response = await syncFiles({ path: syncPath || undefined });
+      if (response.success) {
+        setSyncMessage(`同步任务已创建，任务ID: ${response.task_id}`);
+        onClose();
+        setSyncPath("");
+        fetchTasks();
+      } else {
+        setSyncMessage(`创建同步任务失败: ${response.message}`);
+      }
+    } catch (error) {
+      setSyncMessage(`创建同步任务失败: ${error}`);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
 
   // 未登录时不显示内容（会被重定向）
   if (!isAuthenticated) {
@@ -487,13 +539,13 @@ export default function SettingsPage() {
               {/* Server Status Card */}
               <Card className="border-none shadow-md">
                 <CardBody className="flex flex-row items-center gap-3 p-4">
-                  <div className={`p-2 rounded-xl ${serverStats.status === 'online' ? 'bg-success/20' : 'bg-danger/20'}`}>
-                    <ServerIcon className={`w-5 h-5 md:w-6 md:h-6 ${serverStats.status === 'online' ? 'text-success' : 'text-danger'}`} />
+                  <div className={`p-2 rounded-xl ${serverStats?.status === 'online' ? 'bg-success/20' : 'bg-danger/20'}`}>
+                    <ServerIcon className={`w-5 h-5 md:w-6 md:h-6 ${serverStats?.status === 'online' ? 'text-success' : 'text-danger'}`} />
                   </div>
                   <div className="min-w-0">
                     <p className="text-xs text-default-500 truncate">服务器</p>
-                    <p className={`text-sm md:text-lg font-bold ${serverStats.status === 'online' ? 'text-success' : 'text-danger'}`}>
-                      {serverStats.status === 'online' ? '运行中' : '离线'}
+                    <p className={`text-sm md:text-lg font-bold ${serverStats?.status === 'online' ? 'text-success' : 'text-danger'}`}>
+                      {serverStats?.status === 'online' ? '运行中' : '离线'}
                     </p>
                   </div>
                 </CardBody>
@@ -507,7 +559,7 @@ export default function SettingsPage() {
                   </div>
                   <div className="min-w-0">
                     <p className="text-xs text-default-500 truncate">CPU</p>
-                    <p className="text-sm md:text-lg font-bold">{serverStats.cpu}%</p>
+                    <p className="text-sm md:text-lg font-bold">{serverStats?.cpu_usage?.toFixed(0)}%</p>
                   </div>
                 </CardBody>
               </Card>
@@ -520,7 +572,7 @@ export default function SettingsPage() {
                   </div>
                   <div className="min-w-0">
                     <p className="text-xs text-default-500 truncate">内存</p>
-                    <p className="text-sm md:text-lg font-bold">{serverStats.memory}%</p>
+                    <p className="text-sm md:text-lg font-bold">{serverStats?.memory?.used_percent?.toFixed(0)}%</p>
                   </div>
                 </CardBody>
               </Card>
@@ -533,7 +585,7 @@ export default function SettingsPage() {
                   </div>
                   <div className="min-w-0">
                     <p className="text-xs text-default-500 truncate">存储</p>
-                    <p className="text-sm md:text-lg font-bold">{serverStats.disk.percentage}%</p>
+                    <p className="text-sm md:text-lg font-bold">{serverStats?.disk?.used_percent?.toFixed(0)}%</p>
                   </div>
                 </CardBody>
               </Card>
@@ -549,23 +601,23 @@ export default function SettingsPage() {
                 <CardBody className="space-y-3 md:space-y-4">
                   <div className="flex items-center justify-between">
                     <span className="text-default-500 text-sm">运行时间</span>
-                    <span className="font-medium text-sm">{serverStats.uptime}</span>
+                    <span className="font-medium text-sm">{serverStats ? formatUptime(serverStats.uptime_seconds) : '加载中...'}</span>
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="text-default-500 text-sm">网络上传</span>
-                    <span className="font-medium text-sm">{serverStats.network.upload}</span>
+                    <span className="font-medium text-sm">{serverStats ? formatBytes(serverStats.network.upload_bytes) : '加载中...'}</span>
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="text-default-500 text-sm">网络下载</span>
-                    <span className="font-medium text-sm">{serverStats.network.download}</span>
+                    <span className="font-medium text-sm">{serverStats ? formatBytes(serverStats.network.download_bytes) : '加载中...'}</span>
                   </div>
                   <div className="space-y-2">
                     <div className="flex items-center justify-between text-sm">
                       <span className="text-default-500">存储空间</span>
-                      <span>{serverStats.disk.used} / {serverStats.disk.total} GB</span>
+                      <span>{serverStats ? `${serverStats.disk.used_gb.toFixed(0)} / ${serverStats.disk.total_gb.toFixed(0)} GB` : '加载中...'}</span>
                     </div>
                     <Progress
-                      value={serverStats.disk.percentage}
+                      value={serverStats?.disk?.used_percent || 0}
                       color="secondary"
                       className="h-2"
                     />
@@ -642,9 +694,16 @@ export default function SettingsPage() {
                   {isMobile ? (
                     // Mobile: Card list
                     <div className="p-4">
-                      {users.map((user) => (
-                        <MobileUserCard key={user.id} user={user} />
-                      ))}
+                      {members.length === 0 ? (
+                        <div className="text-center text-default-500 py-8">
+                          <UsersIcon className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                          <p>暂无成员</p>
+                        </div>
+                      ) : (
+                        members.map((user) => (
+                          <MobileUserCard key={user.id} user={user} />
+                        ))
+                      )}
                     </div>
                   ) : (
                     // Desktop: Table
@@ -661,12 +720,12 @@ export default function SettingsPage() {
                           </tr>
                         </thead>
                         <tbody>
-                          {users.map((user) => (
+                          {members.map((user) => (
                             <tr key={user.id} className="border-b border-divider hover:bg-default-50">
                               <td className="p-4">
                                 <div className="flex items-center gap-3">
                                   <Avatar
-                                    name={user.name}
+                                    name={user.username}
                                     size="sm"
                                     isBordered
                                     color={
@@ -678,34 +737,36 @@ export default function SettingsPage() {
                                     }
                                   />
                                   <div>
-                                    <p className="font-medium">{user.name}</p>
-                                    <p className="text-xs text-default-500">{user.email}</p>
+                                    <p className="font-medium">{user.username}</p>
+                                    <p className="text-xs text-default-500">{user.id}</p>
                                   </div>
                                 </div>
                               </td>
                               <td className="p-4">
                                 <Chip
                                   size="sm"
-                                  color={user.role === "admin" ? "primary" : "default"}
+                                  color={user.id === 1 ? "primary" : "default"}
                                   variant="flat"
                                 >
-                                  {user.role === "admin" ? "管理员" : "成员"}
+                                  {user.id === 1 ? "管理员" : "成员"}
                                 </Chip>
                               </td>
                               <td className="p-4">
                                 <div className="flex flex-col gap-1">
                                   <span className="text-sm">
-                                    {user.storageUsed} / {user.storageTotal} GB
+                                    {(user.storage_used / 1024 / 1024 / 1024).toFixed(2)} / {(user.storage_total / 1024 / 1024 / 1024).toFixed(0)} GB
                                   </span>
                                   <Progress
-                                    value={(user.storageUsed / user.storageTotal) * 100}
+                                    value={(user.storage_used / user.storage_total) * 100}
                                     size="sm"
                                     color="primary"
                                     className="h-1 w-24"
                                   />
                                 </div>
                               </td>
-                              <td className="p-4 text-sm text-default-500">{user.lastActive}</td>
+                              <td className="p-4 text-sm text-default-500">
+                                {user.last_active ? new Date(user.last_active).toLocaleString("zh-CN") : "从未活跃"}
+                              </td>
                               <td className="p-4">
                                 <div className="flex items-center gap-2">
                                   {user.status === "online" && <CheckIcon className="w-4 h-4 text-success" />}
@@ -721,13 +782,23 @@ export default function SettingsPage() {
                                   <Button isIconOnly size="sm" variant="light">
                                     <EditIcon className="w-4 h-4" />
                                   </Button>
-                                  <Button isIconOnly size="sm" variant="light" color="danger">
-                                    <Trash2 className="w-4 h-4" />
-                                  </Button>
+                                  {user.id !== 1 && (
+                                    <Button isIconOnly size="sm" variant="light" color="danger">
+                                      <Trash2 className="w-4 h-4" />
+                                    </Button>
+                                  )}
                                 </div>
                               </td>
                             </tr>
                           ))}
+                          {members.length === 0 && (
+                            <tr>
+                              <td colSpan={6} className="p-8 text-center text-default-500">
+                                <UsersIcon className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                                <p>暂无成员</p>
+                              </td>
+                            </tr>
+                          )}
                         </tbody>
                       </table>
                     </div>
@@ -750,22 +821,42 @@ export default function SettingsPage() {
               <Card className="border-none shadow-md">
                 <CardHeader className="flex flex-col sm:flex-row justify-between gap-3">
                   <h2 className="text-base md:text-lg font-semibold">当前任务</h2>
-                  <Button
-                    color="default"
-                    size="sm"
-                    variant="flat"
-                    startContent={<RefreshIcon className="w-4 h-4" />}
-                  >
-                    刷新
-                  </Button>
+                  <div className="flex gap-2">
+                    <Button
+                      color="secondary"
+                      size="sm"
+                      variant="flat"
+                      startContent={<SyncIcon className="w-4 h-4" />}
+                      onPress={onOpen}
+                    >
+                      同步文件
+                    </Button>
+                    <Button
+                      color="default"
+                      size="sm"
+                      variant="flat"
+                      startContent={<RefreshIcon className="w-4 h-4" />}
+                      onPress={fetchTasks}
+                      isLoading={isLoadingTasks}
+                    >
+                      刷新
+                    </Button>
+                  </div>
                 </CardHeader>
-                <CardBody className={isMobile ? "p-0" : undefined}>
+                <CardBody className={isMobile ? "p-0 shadow-none" : undefined}>
                   {isMobile ? (
                     // Mobile: Card list
                     <div className="p-4">
-                      {tasks.map((task) => (
-                        <MobileTaskCard key={task.id} task={task} />
-                      ))}
+                      {tasks.length === 0 ? (
+                        <div className="text-center text-default-500 py-8">
+                          <SyncIcon className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                          <p>暂无任务</p>
+                        </div>
+                      ) : (
+                        tasks.map((task) => (
+                          <MobileTaskCard key={task.id} task={task} />
+                        ))
+                      )}
                     </div>
                   ) : (
                     // Desktop: Table
@@ -773,11 +864,11 @@ export default function SettingsPage() {
                       <table className="w-full">
                         <thead>
                           <tr className="border-b border-divider">
-                            <th className="text-left p-4 text-sm font-medium text-default-500">任务名称</th>
+                            <th className="text-left p-4 text-sm font-medium text-default-500">任务ID</th>
                             <th className="text-left p-4 text-sm font-medium text-default-500">类型</th>
                             <th className="text-left p-4 text-sm font-medium text-default-500">状态</th>
                             <th className="text-left p-4 text-sm font-medium text-default-500">进度</th>
-                            <th className="text-left p-4 text-sm font-medium text-default-500">大小</th>
+                            <th className="text-left p-4 text-sm font-medium text-default-500">消息</th>
                             <th className="text-left p-4 text-sm font-medium text-default-500">创建时间</th>
                             <th className="text-left p-4 text-sm font-medium text-default-500">操作</th>
                           </tr>
@@ -788,20 +879,20 @@ export default function SettingsPage() {
                               <td className="p-4">
                                 <div className="flex items-center gap-3">
                                   <div className="p-2 rounded-lg bg-default-100">
-                                    {task.type === "upload" && <UploadIcon className="w-4 h-4 text-primary" />}
-                                    {task.type === "download" && <DownloadIcon className="w-4 h-4 text-success" />}
-                                    {task.type === "process" && <ProcessIcon className="w-4 h-4 text-warning" />}
-                                    {task.type === "sync" && <SyncIcon className="w-4 h-4 text-secondary" />}
+                                    {task.task_type === "upload" && <UploadIcon className="w-4 h-4 text-primary" />}
+                                    {task.task_type === "download" && <DownloadIcon className="w-4 h-4 text-success" />}
+                                    {task.task_type === "process" && <ProcessIcon className="w-4 h-4 text-warning" />}
+                                    {(task.task_type === "sync" || task.task_type === "sync_files") && <SyncIcon className="w-4 h-4 text-secondary" />}
                                   </div>
-                                  <span className="font-medium">{task.name}</span>
+                                  <span className="font-medium">{task.id}</span>
                                 </div>
                               </td>
                               <td className="p-4">
                                 <Chip size="sm" variant="flat" color="default">
-                                  {task.type === "upload" && "上传"}
-                                  {task.type === "download" && "下载"}
-                                  {task.type === "process" && "处理"}
-                                  {task.type === "sync" && "同步"}
+                                  {task.task_type === "upload" && "上传"}
+                                  {task.task_type === "download" && "下载"}
+                                  {task.task_type === "process" && "处理"}
+                                  {(task.task_type === "sync" || task.task_type === "sync_files") && "同步"}
                                 </Chip>
                               </td>
                               <td className="p-4">
@@ -843,10 +934,12 @@ export default function SettingsPage() {
                                   <span className="text-xs">{task.progress}%</span>
                                 </div>
                               </td>
-                              <td className="p-4 text-sm text-default-500">{task.size || "-"}</td>
-                              <td className="p-4 text-sm text-default-500">{task.createdAt}</td>
+                              <td className="p-4 text-sm text-default-500">{task.message || "-"}</td>
+                              <td className="p-4 text-sm text-default-500">
+                                {new Date(task.created_at).toLocaleString("zh-CN")}
+                              </td>
                               <td className="p-4">
-                                {task.status !== "completed" && (
+                                {task.status !== "completed" && task.status !== "failed" && (
                                   <Button size="sm" color="danger" variant="flat">
                                     取消
                                   </Button>
@@ -854,6 +947,14 @@ export default function SettingsPage() {
                               </td>
                             </tr>
                           ))}
+                          {tasks.length === 0 && (
+                            <tr>
+                              <td colSpan={7} className="p-8 text-center text-default-500">
+                                <SyncIcon className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                                <p>暂无任务</p>
+                              </td>
+                            </tr>
+                          )}
                         </tbody>
                       </table>
                     </div>
@@ -1001,6 +1102,37 @@ export default function SettingsPage() {
             </div>
           </Tab>
         </Tabs>
+
+        {/* 同步文件模态框 */}
+        <Modal isOpen={isOpen} onClose={onClose}>
+          <ModalContent>
+            <ModalHeader>同步文件信息</ModalHeader>
+            <ModalBody>
+              <p className="text-sm text-default-500 mb-4">
+                将扫描存储目录并将文件信息同步到数据库。
+              </p>
+              <Input
+                label="路径（可选）"
+                placeholder="留空则使用默认存储路径"
+                value={syncPath}
+                onValueChange={setSyncPath}
+              />
+              {syncMessage && (
+                <p className={`mt-4 text-sm ${syncMessage.includes("失败") ? "text-danger" : "text-success"}`}>
+                  {syncMessage}
+                </p>
+              )}
+            </ModalBody>
+            <ModalFooter>
+              <Button variant="flat" onPress={onClose} isDisabled={isSyncing}>
+                取消
+              </Button>
+              <Button color="secondary" onPress={handleSync} isLoading={isSyncing}>
+                开始同步
+              </Button>
+            </ModalFooter>
+          </ModalContent>
+        </Modal>
       </div>
     </div>
   );

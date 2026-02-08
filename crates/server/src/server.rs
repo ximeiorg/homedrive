@@ -34,6 +34,8 @@ pub async fn start() {
     // 加载配置
     let config = AppConfig::load().expect("Failed to load configuration");
 
+    println!("{:?}", &config);
+
     // 获取 JWT 密钥
     let jwt_secret = config.jwt_secret();
     services::member::init_jwt_secret(jwt_secret);

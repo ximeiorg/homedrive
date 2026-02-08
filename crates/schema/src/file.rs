@@ -67,3 +67,36 @@ pub struct TriggerSyncResponse {
     pub success: bool,
     pub message: String,
 }
+
+/// 任务列表项
+#[derive(Serialize)]
+pub struct TaskItemResponse {
+    pub id: i64,
+    pub task_type: String,
+    pub status: String,
+    pub progress: i32,
+    pub message: String,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+    pub completed_at: Option<DateTime<Utc>>,
+}
+
+/// 任务列表响应
+#[derive(Serialize)]
+pub struct TaskListResponse {
+    pub tasks: Vec<TaskItemResponse>,
+}
+
+/// 同步文件请求
+#[derive(Deserialize)]
+pub struct SyncFilesRequest {
+    pub path: Option<String>,
+}
+
+/// 同步文件响应
+#[derive(Serialize)]
+pub struct SyncFilesResponse {
+    pub success: bool,
+    pub task_id: i64,
+    pub message: String,
+}

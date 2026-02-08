@@ -1,11 +1,16 @@
 use crate::error::Result;
+use chrono::{DateTime, Utc};
 use once_cell::sync::OnceCell;
 use schema::member::{
     CreateMemberRequest, InitAdminRequest, InitAdminResponse, IsEmptyResponse, LoginRequest,
     LoginResponse, MemberListResponse, MemberResponse, UpdateMemberRequest,
 };
+use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
 use serde::{Deserialize, Serialize};
 use store::DatabaseConnection;
+
+/// 默认存储空间（10GB）
+const DEFAULT_STORAGE_TOTAL: i64 = 10 * 1024 * 1024 * 1024;
 
 /// 全局 JWT 密钥
 static JWT_SECRET: OnceCell<String> = OnceCell::new();
@@ -26,6 +31,64 @@ pub fn get_jwt_secret() -> String {
 pub struct MemberService;
 
 impl MemberService {
+    /// 获取成员的存储使用量
+    async fn get_storage_used(db: &DatabaseConnection, member_id: i64) -> Result<i64> {
+        // 通过member_files关联file_contents计算存储使用量
+        let member_files = store::entity::member_files::Entity::find()
+            .filter(store::entity::member_files::Column::MemberId.eq(member_id))
+            .find_with_related(store::entity::file_contents::Entity)
+            .all(db)
+            .await?;
+
+        let total_size: i64 = member_files
+            .into_iter()
+            .flat_map(|(_, file_contents)| file_contents)
+            .map(|fc| fc.file_size)
+            .sum();
+
+        Ok(total_size)
+    }
+
+    /// 确定成员状态（基于最后活跃时间）
+    fn determine_status(last_active: Option<DateTime<Utc>>) -> String {
+        match last_active {
+            Some(last) => {
+                let now = Utc::now();
+                let duration = now.signed_duration_since(last);
+                if duration.num_minutes() < 5 {
+                    "online".to_string()
+                } else if duration.num_minutes() < 30 {
+                    "away".to_string()
+                } else {
+                    "offline".to_string()
+                }
+            }
+            None => "offline".to_string(),
+        }
+    }
+
+    /// 构建完整的成员响应（包含存储信息）
+    async fn build_member_response(
+        db: &DatabaseConnection,
+        member: store::entity::members::Model,
+    ) -> Result<MemberResponse> {
+        let storage_used = Self::get_storage_used(db, member.id).await.unwrap_or(0);
+        let last_active: Option<DateTime<Utc>> = None; // TODO: 实现最后活跃时间追踪
+        let status = Self::determine_status(last_active);
+
+        Ok(MemberResponse {
+            id: member.id,
+            username: member.username,
+            avatar: member.avatar,
+            storage_tag: member.storage_tag,
+            storage_used,
+            storage_total: DEFAULT_STORAGE_TOTAL,
+            last_active,
+            status,
+            created_at: member.created_at,
+        })
+    }
+
     /// 创建新成员
     pub async fn create_member(
         db: &DatabaseConnection,
@@ -46,13 +109,7 @@ impl MemberService {
 
         let member = store::member::mutation::Mutation::create(db, create_data).await?;
 
-        Ok(MemberResponse {
-            id: member.id,
-            username: member.username,
-            avatar: member.avatar,
-            storage_tag: member.storage_tag,
-            created_at: member.created_at,
-        })
+        Self::build_member_response(db, member).await
     }
 
     /// 获取成员详情
@@ -60,13 +117,13 @@ impl MemberService {
         let member: Option<store::entity::members::Model> =
             store::member::query::Query::find_by_id(db, id).await?;
 
-        Ok(member.map(|m| MemberResponse {
-            id: m.id,
-            username: m.username,
-            avatar: m.avatar,
-            storage_tag: m.storage_tag,
-            created_at: m.created_at,
-        }))
+        match member {
+            Some(m) => {
+                let response = Self::build_member_response(db, m).await?;
+                Ok(Some(response))
+            }
+            None => Ok(None),
+        }
     }
 
     /// 更新成员信息
@@ -84,13 +141,7 @@ impl MemberService {
 
         let member = store::member::mutation::Mutation::update(db, id, update_data).await?;
 
-        Ok(MemberResponse {
-            id: member.id,
-            username: member.username,
-            avatar: member.avatar,
-            storage_tag: member.storage_tag,
-            created_at: member.created_at,
-        })
+        Self::build_member_response(db, member).await
     }
 
     /// 删除成员
@@ -116,16 +167,13 @@ impl MemberService {
         let (members, total): (Vec<store::entity::members::Model>, u64) =
             store::member::query::Query::find_all(db, query).await?;
 
-        let member_responses: Vec<MemberResponse> = members
-            .into_iter()
-            .map(|m| MemberResponse {
-                id: m.id,
-                username: m.username,
-                avatar: m.avatar,
-                storage_tag: m.storage_tag,
-                created_at: m.created_at,
-            })
-            .collect();
+        let mut member_responses: Vec<MemberResponse> = Vec::new();
+        for m in members {
+            match Self::build_member_response(db, m).await {
+                Ok(response) => member_responses.push(response),
+                Err(e) => tracing::error!("Failed to build member response: {:?}", e),
+            }
+        }
 
         Ok(MemberListResponse {
             members: member_responses,
@@ -143,13 +191,13 @@ impl MemberService {
         let member: Option<store::entity::members::Model> =
             store::member::query::Query::find_by_username(db, username).await?;
 
-        Ok(member.map(|m| MemberResponse {
-            id: m.id,
-            username: m.username,
-            avatar: m.avatar,
-            storage_tag: m.storage_tag,
-            created_at: m.created_at,
-        }))
+        match member {
+            Some(m) => {
+                let response = Self::build_member_response(db, m).await?;
+                Ok(Some(response))
+            }
+            None => Ok(None),
+        }
     }
 
     /// 检查用户名是否存在
@@ -166,13 +214,7 @@ impl MemberService {
     ) -> Result<MemberResponse> {
         let member = store::member::mutation::Mutation::update_avatar(db, id, avatar).await?;
 
-        Ok(MemberResponse {
-            id: member.id,
-            username: member.username,
-            avatar: member.avatar,
-            storage_tag: member.storage_tag,
-            created_at: member.created_at,
-        })
+        Self::build_member_response(db, member).await
     }
 
     /// 更新密码
@@ -190,13 +232,7 @@ impl MemberService {
         let member =
             store::member::mutation::Mutation::update_password(db, id, hashed_password).await?;
 
-        Ok(MemberResponse {
-            id: member.id,
-            username: member.username,
-            avatar: member.avatar,
-            storage_tag: member.storage_tag,
-            created_at: member.created_at,
-        })
+        Self::build_member_response(db, member).await
     }
 
     /// 登录验证
@@ -219,15 +255,12 @@ impl MemberService {
         // 生成 token
         let token = generate_token(&member);
 
+        // 构建完整的成员响应
+        let member_response = Self::build_member_response(db, member).await?;
+
         Ok(LoginResponse {
             token,
-            member: MemberResponse {
-                id: member.id,
-                username: member.username,
-                avatar: member.avatar,
-                storage_tag: member.storage_tag,
-                created_at: member.created_at,
-            },
+            member: member_response,
         })
     }
 
@@ -324,7 +357,7 @@ struct Claims {
 fn generate_token(member: &store::entity::members::Model) -> String {
     let secret = get_jwt_secret();
     let header = jsonwebtoken::Header::default();
-    let now = chrono::Utc::now();
+    let now = Utc::now();
     let expiration = now + chrono::Duration::hours(24);
 
     let claims = Claims {
