@@ -9,3 +9,20 @@ serde_json = { version = "*" }
 tracing = "0.1.44"
 tracing-subscriber = {version = "0.3.22", features = ["json"]}
 thiserror = "2.0.18"
+
+# 发布配置优化
+[profile.release]
+opt-level = 3        # 最高优化级别
+lto = "fat"         # 启用完整 LTO 链接时优化
+codegen-units = 1   # 减少代码生成单元以获得更好的优化
+strip = true        # 剥离符号信息以减小二进制文件大小
+panic = "abort"     # 使用 abort 而不是 unwind 减小二进制大小
+
+# 开发配置优化
+[profile.dev]
+debug = true
+opt-level = 0
+
+# 测试配置
+[profile.test]
+opt-level = 0

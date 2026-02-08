@@ -39,6 +39,8 @@ export default function Home() {
 
   // Get viewType from URL params or default to "gallery"
   const viewType = searchParams.get("type") || "gallery";
+  // Get search query from URL params
+  const searchQuery = searchParams.get("q") || "";
 
   // 未登录时不显示内容（会被重定向）
   if (!isAuthenticated) {
@@ -63,7 +65,7 @@ export default function Home() {
         isMenuOpen={isMenuOpen}
         onMenuClose={() => setIsMenuOpen(false)}
       />
-      <MainContent viewType={viewType} />
+      <MainContent viewType={viewType} searchQuery={searchQuery} />
 
       {/* Upload Modal */}
       <UploadModal isOpen={isUploadOpen} onClose={() => setIsUploadOpen(false)} />

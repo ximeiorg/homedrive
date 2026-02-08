@@ -1,8 +1,8 @@
-import React from "react";
-import { Avatar, Input, Dropdown, DropdownTrigger, DropdownMenu, DropdownItem, Button } from "@heroui/react";
+import React, { useState } from "react";
+import { Avatar, Input, Dropdown, DropdownTrigger, DropdownMenu, DropdownItem, Button, Spinner } from "@heroui/react";
 import { Search, Settings, LogOut, User, Menu, Upload } from "lucide-react";
 import { useAuth } from "../auth-context";
-import { useNavigate } from "react-router";
+import { useNavigate, useSearchParams } from "react-router";
 
 interface TopBarProps {
   onMenuClick?: () => void;
@@ -12,10 +12,25 @@ interface TopBarProps {
 export function TopBar({ onMenuClick, onUploadClick }: TopBarProps) {
   const { member, logout } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const [searchQuery, setSearchQuery] = useState(searchParams.get("q") || "");
+  const [isSearching, setIsSearching] = useState(false);
 
   const handleLogout = () => {
     logout();
     navigate("/login");
+  };
+
+  // 处理搜索
+  const handleSearch = async (query: string) => {
+    setSearchQuery(query);
+    if (query.trim()) {
+      // 跳转到首页并带上搜索参数
+      navigate(`/?q=${encodeURIComponent(query.trim())}`);
+    } else {
+      // 空搜索时回到首页
+      navigate("/");
+    }
   };
 
   // 获取用户名首字母作为头像
@@ -40,8 +55,8 @@ export function TopBar({ onMenuClick, onUploadClick }: TopBarProps) {
         >
           <Menu className="w-5 h-5" />
         </Button>
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 bg-gradient-to-br from-primary to-secondary rounded-lg flex items-center justify-center">
+        <div className="flex items-center gap-2 cursor-pointer" onClick={() => navigate("/")}>
+          <div className="w-8 h-8 bg-linear-to-br from-primary to-secondary rounded-lg flex items-center justify-center">
             <span className="text-white font-bold text-lg">H</span>
           </div>
           <span className="text-xl font-bold text-foreground hidden sm:block">HomeDrive</span>
@@ -52,7 +67,9 @@ export function TopBar({ onMenuClick, onUploadClick }: TopBarProps) {
       <div className="flex-1 max-w-2xl mx-4 hidden md:block">
         <Input
           placeholder="搜索照片、视频..."
-          startContent={<Search className="text-default-400 w-4 h-4" />}
+          value={searchQuery}
+          onValueChange={handleSearch}
+          startContent={isSearching ? <Spinner size="sm" /> : <Search className="text-default-400 w-4 h-4" />}
           size="lg"
           radius="full"
           classNames={{

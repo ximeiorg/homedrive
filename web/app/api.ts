@@ -6,6 +6,8 @@ const TASKS_API = `${API_BASE_URL}/api/tasks`;
 const SYSTEM_API = `${API_BASE_URL}/api/system`;
 const AUTH_API = `${API_BASE_URL}/api/auth`;
 
+export { FILES_API, TASKS_API, SYSTEM_API, AUTH_API };
+
 export interface IsEmptyResponse {
   is_empty: boolean;
 }
@@ -45,7 +47,7 @@ export interface LoginResponse {
 }
 
 // 带认证的 fetch 函数
-async function authFetch(
+export async function authFetch(
   url: string,
   options: RequestInit = {}
 ): Promise<Response> {

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { Card, CardBody, Button, ButtonGroup, Select, SelectItem, Chip } from "@heroui/react";
 import { Grid3X3, List, Plus, Upload, Filter } from "lucide-react";
-import { getFileList } from "../api";
+import { getFileList, FILES_API, authFetch } from "../api";
 import { PhotoProvider, PhotoView } from "react-photo-view";
 import { VideoPlayerModal } from "./VideoPlayerModal";
 
@@ -51,9 +51,10 @@ function VideoThumbnail({ src, poster }: { src?: string; poster?: string }) {
 
 interface MainContentProps {
   viewType: string;
+  searchQuery?: string;
 }
 
-export function MainContent({ viewType }: MainContentProps) {
+export function MainContent({ viewType, searchQuery = "" }: MainContentProps) {
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [files, setFiles] = useState<MediaItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -86,6 +87,35 @@ export function MainContent({ viewType }: MainContentProps) {
         
         // 将 viewType 转换为后端 file_type 参数
         let fileTypeParam: string | undefined;
+        
+        // 如果有搜索关键词，使用 search 参数
+        if (searchQuery) {
+          const searchUrl = `${FILES_API}?search=${encodeURIComponent(searchQuery)}`;
+          const searchResponse = await authFetch(searchUrl);
+          if (!searchResponse.ok) {
+            throw new Error("Failed to search files");
+          }
+          const searchResult = await searchResponse.json();
+          
+          const token = localStorage.getItem("token");
+          const mediaItems: MediaItem[] = searchResult.files.map((file: any) => ({
+            id: String(file.id),
+            thumbnail: file.thumbnail 
+              ? `${file.thumbnail}?token=${token}`
+              : file.url 
+                ? `${file.url}?token=${token}` 
+                : `https://picsum.photos/seed/${file.id}/400/400`,
+            videoUrl: file.mime_type?.startsWith("video/") && file.url ? `${file.url}?token=${token}` : undefined,
+            type: file.mime_type?.startsWith("video/") ? "video" : "image",
+            title: file.file_name,
+            date: new Date(file.created_at).toISOString().split("T")[0],
+          }));
+          
+          setFiles(mediaItems);
+          setError(null);
+          return;
+        }
+        
         switch (viewType) {
           case "videos":
             fileTypeParam = "video";
@@ -96,7 +126,6 @@ export function MainContent({ viewType }: MainContentProps) {
             fileTypeParam = "image";
             break;
           default:
-            // gallery, shared, favorites, recent, trash 不传 type，获取所有类型
             fileTypeParam = undefined;
         }
         
@@ -129,7 +158,7 @@ export function MainContent({ viewType }: MainContentProps) {
     };
 
     fetchFiles();
-  }, [viewType]);
+  }, [viewType, searchQuery]);
 
   const getTitle = () => {
     const titles: Record<string, string> = {
@@ -213,7 +242,7 @@ export function MainContent({ viewType }: MainContentProps) {
       {/* Header */}
       <div className="flex items-center justify-between mb-4">
         <div>
-          <h1 className="text-xl font-bold text-foreground">{getTitle()}</h1>
+          <h1 className="text-xl font-bold text-foreground">{getTitle()}{searchQuery && ` - 搜索: "${searchQuery}"`}</h1>
           <p className="text-sm text-default-500 mt-1">{files.length} 个项目</p>
         </div>
         
