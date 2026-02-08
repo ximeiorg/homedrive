@@ -22,12 +22,11 @@ import {
   ModalFooter,
   useDisclosure,
 } from "@heroui/react";
-import { Settings, Clock, Trash2 } from "lucide-react";
+import { Settings, Clock, Trash2, User } from "lucide-react";
 import { useMediaQuery } from "~/hooks/useMediaQuery";
 import { useAuth } from "../auth-context";
 import { getTaskList, syncFiles, type TaskItem, type TaskStatus, getMemberList, type MemberResponse, getSystemStats, type SystemStats } from "../api";
 import { TopBar } from "../components/TopBar";
-import { Sidebar } from "../components/Sidebar";
 
 // Edit icon SVG
 const EditIcon = ({ className }: { className?: string }) => (
@@ -385,7 +384,7 @@ function MobileTaskCard({ task }: { task: TaskItem }) {
 export default function SettingsPage() {
   const [currentTab, setCurrentTab] = useState("overview");
   const isMobile = useMediaQuery("(max-width: 768px)");
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, member } = useAuth();
   const navigate = useNavigate();
   const { isOpen, onOpen, onClose } = useDisclosure();
   const [syncPath, setSyncPath] = useState("");
@@ -511,18 +510,15 @@ export default function SettingsPage() {
 
   return (
     <div className="min-h-screen bg-default-50">
-      <TopBar onMenuClick={() => {}} onUploadClick={() => {}} />
-      <Sidebar selectedKey="settings" isMenuOpen={false} onMenuClose={() => {}} />
+      <TopBar />
       
-      {/* 主内容区 - 与 MainContent 一致的样式 */}
+      {/* 主内容区 */}
       <main
         className="
           overflow-y-auto bg-default-50 transition-all duration-300
           fixed left-0 right-0
-          md:left-64
-          top-16 bottom-0 md:bottom-0
+          top-16 bottom-0
           p-4 md:p-6
-          pb-24 md:pb-6
         "
       >
         <div className="max-w-7xl mx-auto">
@@ -977,6 +973,107 @@ export default function SettingsPage() {
                   )}
                 </CardBody>
               </Card>
+            </div>
+          </Tab>
+
+          <Tab
+            key="account"
+            title={
+              <div className="flex items-center gap-2">
+                <User className="w-4 h-4" />
+                <span className="hidden sm:inline">账户</span>
+              </div>
+            }
+          >
+            <div className="mt-4 md:mt-6 grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-6">
+              {/* 左侧：基本信息 */}
+              <Card className="border-none shadow-md">
+                <CardHeader>
+                  <h2 className="text-base md:text-lg font-semibold">基本信息</h2>
+                </CardHeader>
+                <CardBody className="space-y-4">
+                  <Input
+                    label="用户名"
+                    value={member?.username || ""}
+                    isDisabled
+                    description="用户名不可更改"
+                  />
+                  <Input
+                    label="存储标签"
+                    value={member?.storage_tag || ""}
+                    isDisabled
+                    description="用于本地文件同步"
+                  />
+                  <Input
+                    label="用户ID"
+                    value={member?.id?.toString() || ""}
+                    isDisabled
+                  />
+                </CardBody>
+              </Card>
+
+              {/* 右侧：偏好设置 */}
+              <div className="lg:col-span-2 flex flex-col gap-4">
+                <Card className="border-none shadow-md">
+                  <CardHeader>
+                    <h2 className="text-base md:text-lg font-semibold">显示偏好</h2>
+                  </CardHeader>
+                  <CardBody className="space-y-4">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div>
+                        <p className="font-medium text-sm md:text-base">界面主题</p>
+                        <p className="text-xs text-default-500">选择界面颜色主题</p>
+                      </div>
+                      <Select
+                        size="sm"
+                        defaultSelectedKeys={["dark"]}
+                        className="sm:w-32"
+                      >
+                        <SelectItem key="dark">深色</SelectItem>
+                        <SelectItem key="light">浅色</SelectItem>
+                        <SelectItem key="system">跟随系统</SelectItem>
+                      </Select>
+                    </div>
+
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div>
+                        <p className="font-medium text-sm md:text-base">语言</p>
+                        <p className="text-xs text-default-500">界面显示语言</p>
+                      </div>
+                      <Select
+                        size="sm"
+                        defaultSelectedKeys={["zh-CN"]}
+                        className="sm:w-32"
+                      >
+                        <SelectItem key="zh-CN">中文</SelectItem>
+                        <SelectItem key="en">English</SelectItem>
+                      </Select>
+                    </div>
+                  </CardBody>
+                </Card>
+
+                <Card className="border-none shadow-md">
+                  <CardHeader>
+                    <h2 className="text-base md:text-lg font-semibold">通知设置</h2>
+                  </CardHeader>
+                  <CardBody className="space-y-4">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div>
+                        <p className="font-medium text-sm md:text-base">文件上传通知</p>
+                        <p className="text-xs text-default-500">文件上传完成时发送通知</p>
+                      </div>
+                      <Switch defaultSelected />
+                    </div>
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div>
+                        <p className="font-medium text-sm md:text-base">分享通知</p>
+                        <p className="text-xs text-default-500">收到文件分享时发送通知</p>
+                      </div>
+                      <Switch defaultSelected />
+                    </div>
+                  </CardBody>
+                </Card>
+              </div>
             </div>
           </Tab>
 

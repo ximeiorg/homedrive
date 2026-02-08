@@ -1,0 +1,5 @@
+[toolchain]
+channel = "1.88.0"  # 使用稳定版工具链
+components = ["rustfmt", "clippy"]  # 默认安装 rustfmt 和 clippy
+targets = ["x86_64-unknown-linux-gnu", "x86_64-apple-darwin"]  # 可选：指定目标平台 linux mac
+profile = "minimal"  # 可选：安装最小化工具链

@@ -106,7 +106,12 @@ export function MainContent({ viewType }: MainContentProps) {
         const token = localStorage.getItem("token");
         const mediaItems: MediaItem[] = response.files.map((file) => ({
           id: String(file.id),
-          thumbnail: file.url ? `${file.url}?token=${token}` : `https://picsum.photos/seed/${file.id}/400/400`,
+          // 优先使用缩略图，其次使用原图，最后使用占位图
+          thumbnail: file.thumbnail 
+            ? `${file.thumbnail}?token=${token}`
+            : file.url 
+              ? `${file.url}?token=${token}` 
+              : `https://picsum.photos/seed/${file.id}/400/400`,
           videoUrl: file.mime_type?.startsWith("video/") && file.url ? `${file.url}?token=${token}` : undefined,
           type: file.mime_type?.startsWith("video/") ? "video" : "image",
           title: file.file_name,

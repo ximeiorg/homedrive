@@ -6,10 +6,7 @@ use crate::{
     handler::file::{get_task, list_tasks},
     state::AppState,
 };
-use axum::{
-    Router,
-    routing::get,
-};
+use axum::{Router, routing::get};
 use std::sync::Arc;
 
 /// 创建任务路由

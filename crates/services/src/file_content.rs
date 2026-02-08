@@ -138,7 +138,13 @@ impl FileService {
         sort_order: Option<String>,
         file_type: Option<String>,
         search: Option<String>,
-    ) -> Result<(Vec<(store::entity::member_files::Model, Option<store::entity::file_contents::Model>)>, u64)> {
+    ) -> Result<(
+        Vec<(
+            store::entity::member_files::Model,
+            Option<store::entity::file_contents::Model>,
+        )>,
+        u64,
+    )> {
         // 转换排序参数
         let sort_by = sort_by.as_ref().map(|s| match s.as_str() {
             "file_name" => SortField::FileName,

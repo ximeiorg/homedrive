@@ -5,6 +5,7 @@ export default [
   route("albums", "routes/albums.tsx"),
   route("sharing", "routes/sharing.tsx"),
   route("settings", "routes/settings.tsx"),
+  route("profile", "routes/profile.tsx"),
   route("setup", "routes/setup.tsx"),
   route("login", "routes/login.tsx"),
 ] satisfies RouteConfig;

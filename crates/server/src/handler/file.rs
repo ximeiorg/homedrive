@@ -3,7 +3,7 @@ use crate::error::AppError;
 use crate::state::AppState;
 use axum::{Json, extract::Path, extract::Query, extract::State, response::IntoResponse};
 use chrono::Utc;
-use sea_orm::{EntityTrait, QueryOrder};
+use sea_orm::QueryOrder;
 use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::fs::File;
@@ -14,7 +14,6 @@ use schema::file::{
     TaskItemResponse, TaskListResponse, TriggerSyncRequest, TriggerSyncResponse,
     UploadFileResponse,
 };
-use store::member_file::query::{FileTypeFilter, ListMemberFilesQuery, SortField, SortOrder};
 
 /// Check if a file hash already exists in the database
 pub async fn check_file_hash_exists(
@@ -282,13 +281,14 @@ pub async fn list_files(
             // 从 file_content 获取 storage_path 和 mime_type
             // storage_path 格式: storage_tag/file_path
             // 静态文件路由: /api/static/{storage_tag}/{*path}
-            let (storage_path, mime_type, file_size) = match file_content {
+            let (storage_path, mime_type, file_size, thumbnail) = match file_content {
                 Some(ref fc) => (
                     fc.storage_path.clone(),
                     Some(fc.mime_type.clone()),
                     Some(fc.file_size),
+                    fc.thumbnail.clone(),
                 ),
-                None => (String::new(), None, None),
+                None => (String::new(), None, None, None),
             };
 
             // 构建文件访问 URL: {base_url}/api/static/{storage_path}
@@ -298,12 +298,22 @@ pub async fn list_files(
                 Some(format!("{}/api/static/{}", base_url, storage_path))
             };
 
+            // 构建缩略图 URL
+            let thumbnail_url = thumbnail.and_then(|t| {
+                if t.is_empty() {
+                    None
+                } else {
+                    Some(format!("{}/api/static/{}", base_url, t))
+                }
+            });
+
             FileListItem {
                 id: member_file.id,
                 file_name: member_file.file_name,
                 description: member_file.description,
                 file_size,
                 mime_type,
+                thumbnail: thumbnail_url,
                 url,
                 created_at: member_file.created_at,
                 updated_at: member_file.updated_at,
@@ -461,8 +471,7 @@ pub async fn sync_files(
     Authorized(member_id): Authorized,
     Json(req): Json<SyncFilesRequest>,
 ) -> Json<SyncFilesResponse> {
-    use sea_orm::{ActiveModelTrait, EntityTrait, Set};
-    use store::entity::prelude::SyncMessages;
+    use sea_orm::{ActiveModelTrait, Set};
     use store::entity::task_messages::TaskStatus;
     use tracing::error;
 

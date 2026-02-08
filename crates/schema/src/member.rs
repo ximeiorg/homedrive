@@ -44,10 +44,10 @@ pub struct MemberResponse {
     pub username: String,
     pub avatar: Option<String>,
     pub storage_tag: String,
-    pub storage_used: i64,   // 已使用存储（字节）
-    pub storage_total: i64,   // 总存储空间（字节）
+    pub storage_used: i64,  // 已使用存储（字节）
+    pub storage_total: i64, // 总存储空间（字节）
     pub last_active: Option<chrono::DateTime<chrono::Utc>>, // 最后活跃时间
-    pub status: String,       // online, offline, away
+    pub status: String,     // online, offline, away
     pub created_at: chrono::DateTime<chrono::Utc>,
 }
 

@@ -3,10 +3,7 @@
 //! 定义所有文件相关的路由
 
 use crate::{
-    handler::file::{
-        check_file_hash_exists, list_files, serve_file, 
-        sync_files, upload_file,
-    },
+    handler::file::{check_file_hash_exists, list_files, serve_file, sync_files, upload_file},
     state::AppState,
 };
 use axum::{

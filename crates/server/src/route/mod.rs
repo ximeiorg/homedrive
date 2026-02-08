@@ -20,8 +20,8 @@ use axum::{
 pub use file::{file_router, static_router};
 use hyper::Method;
 pub use member::member_router;
-pub use task::task_router;
 use std::sync::Arc;
+pub use task::task_router;
 use tower_http::cors::Any;
 use tower_http::cors::CorsLayer;
 

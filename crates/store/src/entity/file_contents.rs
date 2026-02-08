@@ -12,6 +12,7 @@ pub struct Model {
     pub content_hash: String,
     pub file_size: i64,
     pub storage_path: String,
+    pub thumbnail: Option<String>,
     pub mime_type: String,
     pub width: i64,
     pub height: i64,

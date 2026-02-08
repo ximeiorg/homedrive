@@ -162,7 +162,7 @@ impl TaskHandler for SyncFilesHandler {
 
         // 用于追踪总进度的变量
         let mut total_files = 0;
-        let _total_dirs = 0;
+        let _skipped_dirs = 0;
 
         // 先估算总文件数（用于进度显示）
         let mut dir_stack = vec![storage_root.to_path_buf()];
@@ -208,8 +208,8 @@ impl TaskHandler for SyncFilesHandler {
         })?;
 
         let mut processed_dirs = 0;
-        let mut skipped_dirs = 0;
-        
+        let mut _skipped_dirs = 0;
+
         while let Some(entry) = entries.next_entry().await.map_err(|e| {
             error!("Failed to read directory entry: {}", e);
             crate::ServiceError::Storage(format!("Failed to read directory entry: {}", e))
@@ -223,8 +223,10 @@ impl TaskHandler for SyncFilesHandler {
             }
 
             let storage_tag = entry.file_name().to_string_lossy().to_string();
-            info!("Processing storage_tag #{}: {}", processed_dirs, storage_tag);
-
+            info!(
+                "Processing storage_tag #{}: {}",
+                processed_dirs, storage_tag
+            );
 
             // 2. 查询 storage_tag 对应的用户 id (member_id)
             let member = store::entity::members::Entity::find()
@@ -233,7 +235,7 @@ impl TaskHandler for SyncFilesHandler {
                 .await?;
 
             if member.is_none() {
-                skipped_dirs += 1;
+                _skipped_dirs += 1;
                 warn!("No member found for storage_tag: {}, skipping", storage_tag);
                 continue;
             }
@@ -264,16 +266,24 @@ impl TaskHandler for SyncFilesHandler {
                     } else if entry_path.is_file() {
                         // 处理文件
                         file_count += 1;
-                        info!("Calling sync_file for: {:?} (file #{})", entry_path, file_count);
+                        info!(
+                            "Calling sync_file for: {:?} (file #{})",
+                            entry_path, file_count
+                        );
                         handler.sync_file(&entry_path, member_id).await?;
                         info!("sync_file completed for: {:?}", entry_path);
                     }
                 }
-                info!("Processed directory: {:?}, found {} files", current_dir, file_count);
+                info!(
+                    "Processed directory: {:?}, found {} files",
+                    current_dir, file_count
+                );
             }
-            
+
             // 清理该用户的不存在文件记录
-            handler.cleanup_missing_files(storage_root_path, member_id).await?;
+            handler
+                .cleanup_missing_files(storage_root_path, member_id)
+                .await?;
         }
 
         // 最终更新进度到 100%
@@ -331,8 +341,11 @@ impl SyncFilesHandler {
 
     /// 同步单个文件
     async fn sync_file(&mut self, file_path: &Path, member_id: i64) -> Result<()> {
-        info!("Starting sync_file for: {:?}, member_id: {}", file_path, member_id);
-        
+        info!(
+            "Starting sync_file for: {:?}, member_id: {}",
+            file_path, member_id
+        );
+
         let file_name = file_path
             .file_name()
             .and_then(|n| n.to_str())
@@ -459,7 +472,10 @@ impl SyncFilesHandler {
             self.progress_tracker.reset_update_time();
         }
 
-        info!("Synced file completed: {} (hash: {})", file_name, content_hash);
+        info!(
+            "Synced file completed: {} (hash: {})",
+            file_name, content_hash
+        );
         Ok(())
     }
 
@@ -467,26 +483,26 @@ impl SyncFilesHandler {
     /// 删除本地文件不存在的 member_files 记录，并减少 file_contents 的 ref_count
     async fn cleanup_missing_files(&mut self, storage_root: &str, member_id: i64) -> Result<()> {
         info!("Cleaning up missing files for member: {}", member_id);
-        
+
         // 查询该用户的所有文件记录
         let member_files = store::entity::member_files::Entity::find()
             .filter(store::entity::member_files::Column::MemberId.eq(member_id))
             .find_also_related(store::entity::file_contents::Entity)
             .all(&*self.conn)
             .await?;
-        
+
         let mut cleaned_count = 0;
-        
+
         for (member_file, file_content_opt) in member_files {
             if let Some(file_content) = file_content_opt {
                 // 构建完整路径：storage_root + storage_tag + storage_path
                 // storage_path 可能是相对于 storage_root 的完整路径，包括 storage_tag 目录
                 let full_path = Path::new(storage_root).join(&file_content.storage_path);
-                
+
                 // 检查文件是否存在
                 if !full_path.exists() {
                     info!("File not found, cleaning up: {:?}", full_path);
-                    
+
                     // 删除 member_files 记录
                     let delete_model = store::entity::member_files::ActiveModel {
                         id: sea_orm::Set(member_file.id),
@@ -495,7 +511,7 @@ impl SyncFilesHandler {
                     store::entity::member_files::Entity::delete(delete_model)
                         .exec(&*self.conn)
                         .await?;
-                    
+
                     // 减少 file_contents 的 ref_count
                     let file_content_id = file_content.id;
                     let new_ref_count = file_content.ref_count - 1;
@@ -508,21 +524,31 @@ impl SyncFilesHandler {
                         store::entity::file_contents::Entity::delete(delete_content)
                             .exec(&*self.conn)
                             .await?;
-                        info!("Deleted file_content with id: {} (ref_count was 0)", file_content_id);
+                        info!(
+                            "Deleted file_content with id: {} (ref_count was 0)",
+                            file_content_id
+                        );
                     } else {
                         // 更新 ref_count
-                        let mut active_model: store::entity::file_contents::ActiveModel = file_content.into();
+                        let mut active_model: store::entity::file_contents::ActiveModel =
+                            file_content.into();
                         active_model.ref_count = Set(new_ref_count);
                         active_model.update(&*self.conn).await?;
-                        info!("Updated file_content id: {}, ref_count to: {}", file_content_id, new_ref_count);
+                        info!(
+                            "Updated file_content id: {}, ref_count to: {}",
+                            file_content_id, new_ref_count
+                        );
                     }
-                    
+
                     cleaned_count += 1;
                 }
             }
         }
-        
-        info!("Cleaned up {} missing file records for member: {}", cleaned_count, member_id);
+
+        info!(
+            "Cleaned up {} missing file records for member: {}",
+            cleaned_count, member_id
+        );
         Ok(())
     }
 }

@@ -2,7 +2,7 @@
 //!
 //! 获取服务器系统状态信息
 
-use axum::{Json, response::IntoResponse};
+use axum::Json;
 use serde::Serialize;
 use std::fs;
 
@@ -61,10 +61,10 @@ pub async fn get_system_stats() -> Json<SystemStatsResponse> {
 
 /// 获取系统运行时间（秒）
 fn get_uptime() -> u64 {
-    if let Ok(content) = fs::read_to_string("/proc/uptime") {
-        if let Some(uptime_str) = content.split_whitespace().next() {
-            return uptime_str.parse::<u64>().unwrap_or(0);
-        }
+    if let Ok(content) = fs::read_to_string("/proc/uptime")
+        && let Some(uptime_str) = content.split_whitespace().next()
+    {
+        return uptime_str.parse::<u64>().unwrap_or(0);
     }
     0
 }
@@ -80,10 +80,10 @@ fn get_memory_stats() -> MemoryStats {
                 if let Some(val) = line.split_whitespace().nth(1) {
                     total = val.parse::<u64>().unwrap_or(0);
                 }
-            } else if line.starts_with("MemAvailable:") || line.starts_with("MemFree:") {
-                if let Some(val) = line.split_whitespace().nth(1) {
-                    available = val.parse::<u64>().unwrap_or(0);
-                }
+            } else if (line.starts_with("MemAvailable:") || line.starts_with("MemFree:"))
+                && let Some(val) = line.split_whitespace().nth(1)
+            {
+                available = val.parse::<u64>().unwrap_or(0);
             }
         }
 
@@ -125,21 +125,20 @@ fn get_disk_stats() -> DiskStats {
 /// 获取CPU使用率（简单实现）
 fn get_cpu_usage() -> f64 {
     // 读取 /proc/stat 获取CPU时间
-    if let Ok(content) = fs::read_to_string("/proc/stat") {
-        if let Some(cpu_line) = content.lines().next() {
-            if cpu_line.starts_with("cpu ") {
-                let parts: Vec<&str> = cpu_line.split_whitespace().collect();
-                if parts.len() >= 5 {
-                    // user, nice, system, idle, iowait, irq, softirq, steal, guest, guest_nice
-                    let user: u64 = parts[1].parse().unwrap_or(0);
-                    let system: u64 = parts[3].parse().unwrap_or(0);
-                    let idle: u64 = parts[4].parse().unwrap_or(0);
-                    let total = user + system + idle;
+    if let Ok(content) = fs::read_to_string("/proc/stat")
+        && let Some(cpu_line) = content.lines().next()
+        && cpu_line.starts_with("cpu ")
+    {
+        let parts: Vec<&str> = cpu_line.split_whitespace().collect();
+        if parts.len() >= 5 {
+            // user, nice, system, idle, iowait, irq, softirq, steal, guest, guest_nice
+            let user: u64 = parts[1].parse().unwrap_or(0);
+            let system: u64 = parts[3].parse().unwrap_or(0);
+            let idle: u64 = parts[4].parse().unwrap_or(0);
+            let total = user + system + idle;
 
-                    if total > 0 {
-                        return ((user + system) as f64 / total as f64) * 100.0;
-                    }
-                }
+            if total > 0 {
+                return ((user + system) as f64 / total as f64) * 100.0;
             }
         }
     }
@@ -160,7 +159,8 @@ fn get_network_stats() -> NetworkStats {
                 let parts: Vec<&str> = line.split_whitespace().collect();
                 if parts.len() >= 17 {
                     let interface = parts[0].trim_end_matches(':');
-                    if interface != "lo" { // 排除回环接口
+                    if interface != "lo" {
+                        // 排除回环接口
                         if let Ok(rx) = parts[1].parse::<u64>() {
                             rx_bytes += rx;
                         }

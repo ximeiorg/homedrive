@@ -100,11 +100,19 @@ export function TopBar({ onMenuClick, onUploadClick }: TopBarProps) {
             </Button>
           </DropdownTrigger>
           <DropdownMenu aria-label="User menu" variant="flat">
-            <DropdownItem key="profile" startContent={<User className="w-4 h-4" />}>
-              {member?.username || "用户"}
+            <DropdownItem 
+              key="profile" 
+              startContent={<User className="w-4 h-4" />}
+              onPress={() => navigate("/profile")}
+            >
+              个人资料
             </DropdownItem>
-            <DropdownItem key="settings" startContent={<Settings className="w-4 h-4" />}>
-              设置
+            <DropdownItem 
+              key="settings" 
+              startContent={<Settings className="w-4 h-4" />}
+              onPress={() => navigate("/settings")}
+            >
+              系统设置
             </DropdownItem>
             <DropdownItem 
               key="logout" 

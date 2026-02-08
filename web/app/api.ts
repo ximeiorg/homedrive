@@ -121,6 +121,7 @@ export async function getFileList(type?: string): Promise<{
     description: string;
     file_size: number | null;
     mime_type: string | null;
+    thumbnail: string | null;
     url: string | null;
     created_at: string;
     updated_at: string;

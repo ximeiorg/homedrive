@@ -1,8 +1,8 @@
+use sea_orm::sea_query::Alias;
 use sea_orm::{
     ColumnTrait, DatabaseConnection, EntityTrait, ModelTrait, PaginatorTrait, QueryFilter,
-    QueryOrder, QuerySelect, RelationTrait,
+    QueryOrder, QuerySelect,
 };
-use sea_orm::sea_query::{Alias, Condition};
 use serde::{Deserialize, Serialize};
 
 use super::super::entity::{file_contents, member_files};
@@ -242,22 +242,20 @@ impl Query {
             let mime_prefixes = file_type.get_mime_prefixes();
             if !mime_prefixes.is_empty() {
                 let mime_pattern = format!("{}%", mime_prefixes[0]);
-                
+
                 // 通过关联查询 file_contents 的 mime_type
                 // 使用条件表达式来过滤
                 let mime_filter = sea_orm::Condition::all()
-                    .add(
-                        file_contents::Column::MimeType.like(mime_pattern.clone())
-                    );
-                
+                    .add(file_contents::Column::MimeType.like(mime_pattern.clone()));
+
                 select = select.filter(
                     member_files::Column::FileContentId.in_subquery(
                         sea_orm::sea_query::Query::select()
                             .column(file_contents::Column::Id)
                             .from(Alias::new("file_contents"))
                             .cond_where(mime_filter)
-                            .to_owned()
-                    )
+                            .to_owned(),
+                    ),
                 );
             }
         }

@@ -32,7 +32,8 @@ pub struct FileListItem {
     pub description: String,
     pub file_size: Option<i64>,
     pub mime_type: Option<String>,
-    pub url: Option<String>, // 文件访问地址
+    pub thumbnail: Option<String>, // 缩略图地址
+    pub url: Option<String>,       // 文件访问地址
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
