@@ -26,6 +26,8 @@ import { Settings, Clock, Trash2 } from "lucide-react";
 import { useMediaQuery } from "~/hooks/useMediaQuery";
 import { useAuth } from "../auth-context";
 import { getTaskList, syncFiles, type TaskItem, type TaskStatus, getMemberList, type MemberResponse, getSystemStats, type SystemStats } from "../api";
+import { TopBar } from "../components/TopBar";
+import { Sidebar } from "../components/Sidebar";
 
 // Edit icon SVG
 const EditIcon = ({ className }: { className?: string }) => (
@@ -508,13 +510,27 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-default-50 p-4 md:p-6">
-      <div className="max-w-7xl mx-auto">
-        {/* Header */}
-        <div className="mb-6 md:mb-8">
-          <h1 className="text-xl md:text-2xl font-bold text-foreground">系统设置</h1>
-          <p className="text-default-500 mt-1 text-sm">管理服务器状态、用户和系统配置</p>
-        </div>
+    <div className="min-h-screen bg-default-50">
+      <TopBar onMenuClick={() => {}} onUploadClick={() => {}} />
+      <Sidebar selectedKey="settings" isMenuOpen={false} onMenuClose={() => {}} />
+      
+      {/* 主内容区 - 与 MainContent 一致的样式 */}
+      <main
+        className="
+          overflow-y-auto bg-default-50 transition-all duration-300
+          fixed left-0 right-0
+          md:left-64
+          top-16 bottom-0 md:bottom-0
+          p-4 md:p-6
+          pb-24 md:pb-6
+        "
+      >
+        <div className="max-w-7xl mx-auto">
+          {/* Header */}
+          <div className="mb-6 md:mb-8">
+            <h1 className="text-xl md:text-2xl font-bold text-foreground">系统设置</h1>
+            <p className="text-default-500 mt-1 text-sm">管理服务器状态、用户和系统配置</p>
+          </div>
 
         <Tabs
           selectedKey={currentTab}
@@ -1120,6 +1136,7 @@ export default function SettingsPage() {
           </ModalContent>
         </Modal>
       </div>
+      </main>
     </div>
   );
 }
