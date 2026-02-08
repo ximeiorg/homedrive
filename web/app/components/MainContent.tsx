@@ -3,6 +3,7 @@ import { Card, CardBody, Button, ButtonGroup, Select, SelectItem, Chip } from "@
 import { Grid3X3, List, Plus, Upload, Filter } from "lucide-react";
 import { getFileList } from "../api";
 import { PhotoProvider, PhotoView } from "react-photo-view";
+import { VideoPlayerModal } from "./VideoPlayerModal";
 
 interface MediaItem {
   id: string;
@@ -57,6 +58,25 @@ export function MainContent({ viewType }: MainContentProps) {
   const [files, setFiles] = useState<MediaItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  
+  // 视频播放器状态
+  const [isVideoPlayerOpen, setIsVideoPlayerOpen] = useState(false);
+  const [currentVideoUrl, setCurrentVideoUrl] = useState<string>("");
+  const [currentVideoTitle, setCurrentVideoTitle] = useState<string>("");
+
+  // 打开视频播放器
+  const openVideoPlayer = (videoUrl: string, title: string) => {
+    setCurrentVideoUrl(videoUrl);
+    setCurrentVideoTitle(title);
+    setIsVideoPlayerOpen(true);
+  };
+
+  // 关闭视频播放器
+  const closeVideoPlayer = () => {
+    setIsVideoPlayerOpen(false);
+    setCurrentVideoUrl("");
+    setCurrentVideoTitle("");
+  };
 
   // 获取文件列表
   useEffect(() => {
@@ -257,7 +277,12 @@ export function MainContent({ viewType }: MainContentProps) {
                 <CardBody className="p-0">
                   <div className="relative w-full h-full overflow-hidden">
                     {item.type === "video" ? (
-                      <VideoThumbnail src={item.videoUrl} poster={item.thumbnail} />
+                      <div 
+                        className="w-full h-full cursor-pointer"
+                        onClick={() => item.videoUrl && openVideoPlayer(item.videoUrl, item.title)}
+                      >
+                        <VideoThumbnail src={item.videoUrl} poster={item.thumbnail} />
+                      </div>
                     ) : (
                       <PhotoView src={item.thumbnail}>
                         <img
@@ -309,7 +334,12 @@ export function MainContent({ viewType }: MainContentProps) {
                       <CardBody className="p-0">
                         <div className="relative w-full h-full overflow-hidden">
                           {item.type === "video" ? (
-                            <VideoThumbnail src={item.videoUrl} poster={item.thumbnail} />
+                            <div 
+                              className="w-full h-full cursor-pointer"
+                              onClick={() => item.videoUrl && openVideoPlayer(item.videoUrl, item.title)}
+                            >
+                              <VideoThumbnail src={item.videoUrl} poster={item.thumbnail} />
+                            </div>
                           ) : (
                             <PhotoView src={item.thumbnail}>
                               <img
@@ -343,6 +373,14 @@ export function MainContent({ viewType }: MainContentProps) {
           </div>
         </PhotoProvider>
       )}
+
+      {/* 视频播放器模态框 */}
+      <VideoPlayerModal
+        isOpen={isVideoPlayerOpen}
+        onClose={closeVideoPlayer}
+        videoUrl={currentVideoUrl}
+        title={currentVideoTitle}
+      />
     </main>
   );
 }
