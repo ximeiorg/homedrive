@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { Card, CardBody, Button, ButtonGroup, Select, SelectItem, Chip } from "@heroui/react";
 import { Grid3X3, List, Plus, Upload, Filter } from "lucide-react";
 import { getFileList } from "../api";
+import { PhotoProvider, PhotoView } from "react-photo-view";
 
 interface MediaItem {
   id: string;
@@ -10,6 +11,9 @@ interface MediaItem {
   type: "image" | "video";
   title: string;
   date: string;
+  fileSize?: number;
+  width?: number;
+  height?: number;
 }
 
 // 视频预览组件 - 鼠标悬停时播放
@@ -242,96 +246,102 @@ export function MainContent({ viewType }: MainContentProps) {
         </div>
       ) : viewMode === "grid" ? (
         /* Grid View */
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2 md:gap-4">
-          {files.map((item) => (
-            <Card
-              key={item.id}
-              isPressable
-              shadow="sm"
-              className="aspect-square overflow-hidden group"
-            >
-              <CardBody className="p-0">
-                <div className="relative w-full h-full overflow-hidden">
-                  {item.type === "video" ? (
-                    <VideoThumbnail src={item.videoUrl} poster={item.thumbnail} />
-                  ) : (
-                    <img
-                      src={item.thumbnail}
-                      alt={item.title}
-                      className="w-full h-full object-cover transition-transform group-hover:scale-105"
-                      loading="lazy"
-                    />
-                  )}
-                  {item.type === "video" && (
-                    <div className="absolute top-1 right-1 md:top-2 md:right-2">
-                      <Chip
-                        size="sm"
-                        color="default"
-                        variant="flat"
-                        className="bg-black/60 text-white text-xs"
-                      >
-                        视频
-                      </Chip>
-                    </div>
-                  )}
-                  <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors" />
-                </div>
-              </CardBody>
-            </Card>
-          ))}
-        </div>
+        <PhotoProvider>
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2 md:gap-4">
+            {files.map((item) => (
+              <Card
+                key={item.id}
+                shadow="sm"
+                className="aspect-square overflow-hidden group"
+              >
+                <CardBody className="p-0">
+                  <div className="relative w-full h-full overflow-hidden">
+                    {item.type === "video" ? (
+                      <VideoThumbnail src={item.videoUrl} poster={item.thumbnail} />
+                    ) : (
+                      <PhotoView src={item.thumbnail}>
+                        <img
+                          src={item.thumbnail}
+                          alt={item.title}
+                          className="w-full h-full object-cover transition-transform group-hover:scale-105 cursor-pointer"
+                          loading="lazy"
+                        />
+                      </PhotoView>
+                    )}
+                    {item.type === "video" && (
+                      <div className="absolute top-1 right-1 md:top-2 md:right-2">
+                        <Chip
+                          size="sm"
+                          color="default"
+                          variant="flat"
+                          className="bg-black/60 text-white text-xs"
+                        >
+                          视频
+                        </Chip>
+                      </div>
+                    )}
+                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors pointer-events-none" />
+                  </div>
+                </CardBody>
+              </Card>
+            ))}
+          </div>
+        </PhotoProvider>
       ) : (
         /* List View */
-        <div className="space-y-6">
-          {groupMediaByDate(files).map(([date, items]) => (
-            <div key={date}>
-              {/* Date Header */}
-              <div className="sticky top-0 z-10 bg-default-50/95 backdrop-blur-sm py-2 mb-3">
-                <h3 className="text-sm font-semibold text-default-600">{date}</h3>
+        <PhotoProvider>
+          <div className="space-y-6">
+            {groupMediaByDate(files).map(([date, items]) => (
+              <div key={date}>
+                {/* Date Header */}
+                <div className="sticky top-0 z-10 bg-default-50/95 backdrop-blur-sm py-2 mb-3">
+                  <h3 className="text-sm font-semibold text-default-600">{date}</h3>
+                </div>
+                
+                {/* Media Grid for this date */}
+                <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-2">
+                  {items.map((item) => (
+                    <Card
+                      key={item.id}
+                      shadow="sm"
+                      className="aspect-square overflow-hidden group"
+                    >
+                      <CardBody className="p-0">
+                        <div className="relative w-full h-full overflow-hidden">
+                          {item.type === "video" ? (
+                            <VideoThumbnail src={item.videoUrl} poster={item.thumbnail} />
+                          ) : (
+                            <PhotoView src={item.thumbnail}>
+                              <img
+                                src={item.thumbnail}
+                                alt={item.title}
+                                className="w-full h-full object-cover transition-transform group-hover:scale-105 cursor-pointer"
+                                loading="lazy"
+                              />
+                            </PhotoView>
+                          )}
+                          {item.type === "video" && (
+                            <div className="absolute top-1 right-1">
+                              <Chip
+                                size="sm"
+                                color="default"
+                                variant="flat"
+                                className="bg-black/60 text-white text-xs"
+                              >
+                                视频
+                              </Chip>
+                            </div>
+                          )}
+                          <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors pointer-events-none" />
+                        </div>
+                      </CardBody>
+                    </Card>
+                  ))}
+                </div>
               </div>
-              
-              {/* Media Grid for this date */}
-              <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-2">
-                {items.map((item) => (
-                  <Card
-                    key={item.id}
-                    isPressable
-                    shadow="sm"
-                    className="aspect-square overflow-hidden group"
-                  >
-                    <CardBody className="p-0">
-                      <div className="relative w-full h-full overflow-hidden">
-                        {item.type === "video" ? (
-                          <VideoThumbnail src={item.videoUrl} poster={item.thumbnail} />
-                        ) : (
-                          <img
-                            src={item.thumbnail}
-                            alt={item.title}
-                            className="w-full h-full object-cover transition-transform group-hover:scale-105"
-                            loading="lazy"
-                          />
-                        )}
-                        {item.type === "video" && (
-                          <div className="absolute top-1 right-1">
-                            <Chip
-                              size="sm"
-                              color="default"
-                              variant="flat"
-                              className="bg-black/60 text-white text-xs"
-                            >
-                              视频
-                            </Chip>
-                          </div>
-                        )}
-                        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors" />
-                      </div>
-                    </CardBody>
-                  </Card>
-                ))}
-              </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        </PhotoProvider>
       )}
     </main>
   );

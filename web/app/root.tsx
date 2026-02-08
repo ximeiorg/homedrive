@@ -9,6 +9,7 @@ import {
 
 import type { Route } from "./+types/root";
 import "./app.css";
+import 'react-photo-view/dist/react-photo-view.css';
 import { HeroUIProvider } from "@heroui/react";
 import { AuthProvider } from "./auth-context";
 

@@ -11,7 +11,8 @@ use tokio_util::io::ReaderStream;
 
 use schema::file::{
     HashCheckQuery, HashCheckResponse, ListFilesQuery, SyncFilesRequest, SyncFilesResponse,
-    TaskListResponse, TaskItemResponse, TriggerSyncRequest, TriggerSyncResponse, UploadFileResponse,
+    TaskItemResponse, TaskListResponse, TriggerSyncRequest, TriggerSyncResponse,
+    UploadFileResponse,
 };
 use store::member_file::query::{FileTypeFilter, ListMemberFilesQuery, SortField, SortOrder};
 
@@ -146,6 +147,7 @@ pub async fn serve_file(
     // LocalStorage uses: root/{storage_tag}/{file_path}
     // storage_path already contains: storage_tag/file_path
     let mut file_path_buf = PathBuf::from(storage_root);
+    file_path_buf.push(storage_tag);
     file_path_buf.push(&file_path);
 
     // Check if file exists
@@ -390,7 +392,7 @@ pub async fn list_tasks(
 ) -> Json<TaskListResponse> {
     use sea_orm::{EntityTrait, QuerySelect};
     use store::entity::task_messages::{Column, Entity as TaskMessages};
-    
+
     let db = &state.conn;
 
     // 查询最近的任务，按创建时间倒序
@@ -405,15 +407,16 @@ pub async fn list_tasks(
     let task_items: Vec<TaskItemResponse> = tasks
         .into_iter()
         .map(|task| {
-            let message = task.error_message.clone().unwrap_or_else(|| {
-                match task.status.as_str() {
-                    "pending" => "等待处理".to_string(),
-                    "processing" => "处理中".to_string(),
-                    "completed" => "已完成".to_string(),
-                    "failed" => "处理失败".to_string(),
-                    _ => "未知状态".to_string(),
-                }
-            });
+            let message =
+                task.error_message
+                    .clone()
+                    .unwrap_or_else(|| match task.status.as_str() {
+                        "pending" => "等待处理".to_string(),
+                        "processing" => "处理中".to_string(),
+                        "completed" => "已完成".to_string(),
+                        "failed" => "处理失败".to_string(),
+                        _ => "未知状态".to_string(),
+                    });
 
             TaskItemResponse {
                 id: task.id,
@@ -439,7 +442,7 @@ pub async fn get_task(
 ) -> Result<Json<TaskItemResponse>, AppError> {
     use sea_orm::EntityTrait;
     use store::entity::prelude::SyncMessages;
-    
+
     let db = &state.conn;
 
     let task = SyncMessages::find_by_id(id)
@@ -449,15 +452,16 @@ pub async fn get_task(
 
     match task {
         Some(t) => {
-            let message = t.error_message.clone().unwrap_or_else(|| {
-                match t.status.as_str() {
+            let message = t
+                .error_message
+                .clone()
+                .unwrap_or_else(|| match t.status.as_str() {
                     "pending" => "等待处理".to_string(),
                     "processing" => "处理中".to_string(),
                     "completed" => "已完成".to_string(),
                     "failed" => "处理失败".to_string(),
                     _ => "未知状态".to_string(),
-                }
-            });
+                });
 
             Ok(Json(TaskItemResponse {
                 id: t.id,
@@ -485,7 +489,7 @@ pub async fn sync_files(
     use store::entity::prelude::SyncMessages;
     use store::entity::task_messages::TaskStatus;
     use tracing::error;
-    
+
     let db = &state.conn;
     let storage_root = state.config.storage.volume.clone();
 
@@ -529,7 +533,7 @@ pub async fn sync_files(
             // 发送任务到任务队列
             let mut payload = payload;
             payload.task_message_id = Some(task.id);
-            
+
             match state.sync_task_sender.send(payload).await {
                 Ok(()) => Json(SyncFilesResponse {
                     success: true,

@@ -973,30 +973,13 @@ export default function SettingsPage() {
               </div>
             }
           >
-            <div className="mt-4 md:mt-6 grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
-              {/* General Settings */}
+            <div className="mt-4 md:mt-6 grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-6">
+              {/* 左侧：常规设置 */}
               <Card className="border-none shadow-md">
                 <CardHeader>
                   <h2 className="text-base md:text-lg font-semibold">常规设置</h2>
                 </CardHeader>
                 <CardBody className="space-y-4 md:space-y-6">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                    <div>
-                      <p className="font-medium text-sm md:text-base">最大文件大小</p>
-                      <p className="text-xs md:text-sm text-default-500">单个文件的最大上传大小</p>
-                    </div>
-                    <Select
-                      size="sm"
-                      defaultSelectedKeys={[String(settings.maxFileSize)]}
-                      className="sm:w-32"
-                    >
-                      <SelectItem key="256">256 MB</SelectItem>
-                      <SelectItem key="512">512 MB</SelectItem>
-                      <SelectItem key="1024">1 GB</SelectItem>
-                      <SelectItem key="2048">2 GB</SelectItem>
-                    </Select>
-                  </div>
-
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                     <div>
                       <p className="font-medium text-sm md:text-base">界面主题</p>
@@ -1030,70 +1013,73 @@ export default function SettingsPage() {
                 </CardBody>
               </Card>
 
-              {/* Storage Settings */}
-              <Card className="border-none shadow-md">
-                <CardHeader>
-                  <h2 className="text-base md:text-lg font-semibold">存储设置</h2>
-                </CardHeader>
-                <CardBody className="space-y-4 md:space-y-6">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                    <div>
-                      <p className="font-medium text-sm md:text-base">允许公开分享</p>
-                      <p className="text-xs md:text-sm text-default-500">允许生成分享链接</p>
+              {/* 右侧：存储设置和安全设置（上下排列） */}
+              <div className="lg:col-span-2 flex flex-col gap-4 md:gap-6">
+                {/* Storage Settings */}
+                <Card className="border-none shadow-md">
+                  <CardHeader>
+                    <h2 className="text-base md:text-lg font-semibold">存储设置</h2>
+                  </CardHeader>
+                  <CardBody className="space-y-4 md:space-y-6">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div>
+                        <p className="font-medium text-sm md:text-base">允许公开分享</p>
+                        <p className="text-xs md:text-sm text-default-500">允许生成分享链接</p>
+                      </div>
+                      <Switch defaultSelected={settings.allowPublicSharing} />
                     </div>
-                    <Switch defaultSelected={settings.allowPublicSharing} />
-                  </div>
 
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                    <div>
-                      <p className="font-medium text-sm md:text-base">自动备份</p>
-                      <p className="text-xs md:text-sm text-default-500">自动备份文件到云端</p>
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div>
+                        <p className="font-medium text-sm md:text-base">自动备份</p>
+                        <p className="text-xs md:text-sm text-default-500">自动备份文件到云端</p>
+                      </div>
+                      <Switch defaultSelected={settings.autoBackup} />
                     </div>
-                    <Switch defaultSelected={settings.autoBackup} />
-                  </div>
 
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                    <div>
-                      <p className="font-medium text-sm md:text-base">备份频率</p>
-                      <p className="text-xs md:text-sm text-default-500">自动备份的时间间隔</p>
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div>
+                        <p className="font-medium text-sm md:text-base">备份频率</p>
+                        <p className="text-xs md:text-sm text-default-500">自动备份的时间间隔</p>
+                      </div>
+                      <Select
+                        size="sm"
+                        defaultSelectedKeys={[settings.backupFrequency]}
+                        className="sm:w-32"
+                      >
+                        <SelectItem key="hourly">每小时</SelectItem>
+                        <SelectItem key="daily">每天</SelectItem>
+                        <SelectItem key="weekly">每周</SelectItem>
+                        <SelectItem key="monthly">每月</SelectItem>
+                      </Select>
                     </div>
-                    <Select
-                      size="sm"
-                      defaultSelectedKeys={[settings.backupFrequency]}
-                      className="sm:w-32"
-                    >
-                      <SelectItem key="hourly">每小时</SelectItem>
-                      <SelectItem key="daily">每天</SelectItem>
-                      <SelectItem key="weekly">每周</SelectItem>
-                      <SelectItem key="monthly">每月</SelectItem>
-                    </Select>
-                  </div>
-                </CardBody>
-              </Card>
+                  </CardBody>
+                </Card>
 
-              {/* Security Settings */}
-              <Card className="border-none shadow-md">
-                <CardHeader>
-                  <h2 className="text-base md:text-lg font-semibold">安全设置</h2>
-                </CardHeader>
-                <CardBody className="space-y-4 md:space-y-6">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                    <div>
-                      <p className="font-medium text-sm md:text-base">消息通知</p>
-                      <p className="text-xs md:text-sm text-default-500">接收系统消息通知</p>
+                {/* Security Settings */}
+                <Card className="border-none shadow-md">
+                  <CardHeader>
+                    <h2 className="text-base md:text-lg font-semibold">安全设置</h2>
+                  </CardHeader>
+                  <CardBody className="space-y-4 md:space-y-6">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div>
+                        <p className="font-medium text-sm md:text-base">消息通知</p>
+                        <p className="text-xs md:text-sm text-default-500">接收系统消息通知</p>
+                      </div>
+                      <Switch defaultSelected={settings.notifications} />
                     </div>
-                    <Switch defaultSelected={settings.notifications} />
-                  </div>
 
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                    <div>
-                      <p className="font-medium text-sm md:text-base">两步验证</p>
-                      <p className="text-xs md:text-sm text-default-500">登录时需要二次验证</p>
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div>
+                        <p className="font-medium text-sm md:text-base">两步验证</p>
+                        <p className="text-xs md:text-sm text-default-500">登录时需要二次验证</p>
+                      </div>
+                      <Switch defaultSelected={settings.twoFactorAuth} />
                     </div>
-                    <Switch defaultSelected={settings.twoFactorAuth} />
-                  </div>
-                </CardBody>
-              </Card>
+                  </CardBody>
+                </Card>
+              </div>
             </div>
 
             <div className="mt-6 flex flex-col sm:flex-row justify-end gap-3">
