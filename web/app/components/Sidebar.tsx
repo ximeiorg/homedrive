@@ -123,7 +123,7 @@ function DesktopSidebar({ selectedKey }: { selectedKey?: string }) {
   };
 
   return (
-    <aside className="fixed left-0 top-16 bottom-0 w-64 bg-background border-r border-divider overflow-y-auto p-4 hidden md:block">
+    <aside className="fixed left-0 top-16 bottom-0 w-64 bg-background dark:bg-default-900 border-r border-divider overflow-y-auto p-4 hidden md:block">
       <nav className="space-y-6">
         <div>
           <h3 className="text-xs font-semibold text-default-400 uppercase tracking-wider mb-3 px-3">
@@ -190,7 +190,7 @@ function DesktopSidebar({ selectedKey }: { selectedKey?: string }) {
       </nav>
 
       {/* Server Status & Storage Section */}
-      <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-divider bg-background">
+      <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-divider bg-background dark:bg-default-900">
         {/* Server Status */}
         <div className="flex items-center gap-2 mb-3">
           <div className={`w-2 h-2 rounded-full ${serverStatus.online ? 'bg-success animate-pulse' : 'bg-danger'}`} />
@@ -233,7 +233,7 @@ function MobileBottomNav({ selectedKey }: { selectedKey?: string }) {
 
   return (
     <nav className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 md:hidden">
-      <div className="flex items-center gap-2 px-3 py-2 bg-default-900/60 backdrop-blur-xl rounded-full border border-white/10 shadow-xl">
+      <div className="flex items-center gap-2 px-3 py-2 bg-default-900/60 backdrop-blur-xl rounded-full border border-white/10 shadow-xl dark:bg-default-900/60 light:bg-white/80 light:border-black/10">
         {mainItems.map((item) => {
           const url = getItemUrl(item.key, searchParams);
           const active = isItemActive(item.key, location, searchParams);
@@ -245,7 +245,7 @@ function MobileBottomNav({ selectedKey }: { selectedKey?: string }) {
               className={`w-12 h-12 rounded-full flex items-center justify-center transition-all ${
                 active
                   ? "bg-white/20 text-white shadow-lg"
-                  : "text-white/70 hover:text-white hover:bg-white/10"
+                  : "text-white/70 hover:text-white hover:bg-white/10 dark:text-white/70 dark:hover:text-white dark:hover:bg-white/10 light:text-black/70 light:hover:text-black light:hover:bg-black/10"
               }`}
               aria-label={item.label}
             >
@@ -257,7 +257,7 @@ function MobileBottomNav({ selectedKey }: { selectedKey?: string }) {
         <Button
           isIconOnly
           variant="light"
-          className="w-12 h-12 rounded-full text-white/70 hover:text-white hover:bg-white/10"
+          className="w-12 h-12 rounded-full dark:text-white/70 dark:hover:text-white dark:hover:bg-white/10 light:text-black/70 light:hover:text-black light:hover:bg-black/10"
           aria-label="菜单"
         >
           <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

@@ -3,3 +3,77 @@
 /* Note: You may need to change the path to fit your project structure */
 @source '../node_modules/@heroui/theme/dist/**/*.{js,ts,jsx,tsx}';
 @custom-variant dark (&:is(.dark *));
+
+/* 确保 html 有正确的高度 */
+html {
+  height: 100%;
+}
+
+/* 强制暗色模式样式 - 当 html 有 dark 类时 */
+html.dark {
+  color-scheme: dark;
+}
+
+html.dark body,
+html.dark .bg-default-50 {
+  background-color: #111111 !important;
+}
+
+html.dark .text-foreground {
+  color: #ffffff !important;
+}
+
+html.dark .text-default-500,
+html.dark .text-default-400,
+html.dark .text-default-600 {
+  color: #a1a1aa !important;
+}
+
+html.dark .bg-default-100 {
+  background-color: #27272a !important;
+}
+
+html.dark .bg-default-200 {
+  background-color: #3f3f46 !important;
+}
+
+html.dark .bg-default-900 {
+  background-color: #111111 !important;
+}
+
+html.dark .border-divider,
+html.dark .border-default-200 {
+  border-color: #3f3f46 !important;
+}
+
+/* 所有带背景的导航元素 */
+html.dark header,
+html.dark .bg-background,
+html.dark aside {
+  background-color: #111111 !important;
+}
+
+/* 半透明背景 */
+html.dark .backdrop-blur-md,
+html.dark .backdrop-blur-xl {
+  background-color: rgba(17, 17, 17, 0.8) !important;
+}
+
+/* 强制深色背景类 */
+html.dark [class*="bg-default-"],
+html.dark [class*="bg-"][class*="-900"],
+html.dark [class*="bg-"][class*="-950"] {
+  background-color: #111111 !important;
+}
+
+/* 移动端底部导航 */
+html.dark nav [class*="bg-default-900"] {
+  background-color: #111111 !important;
+  background: #111111 !important;
+}
+
+/* 模态框背景 */
+html.dark [class*="Modal"],
+html.dark .modal-content {
+  background-color: #18181b !important;
+}

@@ -1,7 +1,8 @@
 import React, { useState } from "react";
 import { Avatar, Input, Dropdown, DropdownTrigger, DropdownMenu, DropdownItem, Button, Spinner } from "@heroui/react";
-import { Search, Settings, LogOut, User, Menu, Upload } from "lucide-react";
+import { Search, Settings, LogOut, User, Menu, Upload, Sun, Moon } from "lucide-react";
 import { useAuth } from "../auth-context";
+import { useTheme } from "../theme-context";
 import { useNavigate, useSearchParams } from "react-router";
 
 interface TopBarProps {
@@ -11,6 +12,7 @@ interface TopBarProps {
 
 export function TopBar({ onMenuClick, onUploadClick }: TopBarProps) {
   const { member, logout } = useAuth();
+  const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [searchQuery, setSearchQuery] = useState(searchParams.get("q") || "");
@@ -80,6 +82,20 @@ export function TopBar({ onMenuClick, onUploadClick }: TopBarProps) {
 
       {/* Right: Actions */}
       <div className="flex items-center gap-2">
+        {/* Theme Toggle */}
+        <Button
+          isIconOnly
+          variant="light"
+          onPress={toggleTheme}
+          aria-label="Toggle theme"
+        >
+          {theme === "light" ? (
+            <Sun className="w-5 h-5 text-warning" />
+          ) : (
+            <Moon className="w-5 h-5 text-primary" />
+          )}
+        </Button>
+
         {/* Upload Button */}
         <Button
           variant="flat"

@@ -12,6 +12,7 @@ import "./app.css";
 import 'react-photo-view/dist/react-photo-view.css';
 import { HeroUIProvider } from "@heroui/react";
 import { AuthProvider } from "./auth-context";
+import { ThemeProvider } from "./theme-context";
 
 export const links: Route.LinksFunction = () => [
   { rel: "preconnect", href: "https://fonts.googleapis.com" },
@@ -36,9 +37,11 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <Links />
       </head>
       <body>
-        <HeroUIProvider>
-          {children}
-        </HeroUIProvider>
+        <ThemeProvider>
+          <HeroUIProvider>
+            {children}
+          </HeroUIProvider>
+        </ThemeProvider>
         <ScrollRestoration />
         <Scripts />
       </body>

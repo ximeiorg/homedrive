@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from "react";
-import { Card, CardBody, Button, ButtonGroup, Select, SelectItem, Chip } from "@heroui/react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
+import { Card, CardBody, Button, ButtonGroup, Select, SelectItem, Chip, Spinner } from "@heroui/react";
 import { Grid3X3, List, Plus, Upload, Filter } from "lucide-react";
 import { getFileList, FILES_API, authFetch } from "../api";
 import { PhotoProvider, PhotoView } from "react-photo-view";
 import { VideoPlayerModal } from "./VideoPlayerModal";
+import InfiniteScroll from "react-infinite-scroll-component";
 
 interface MediaItem {
   id: string;
@@ -60,6 +61,15 @@ export function MainContent({ viewType, searchQuery = "" }: MainContentProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   
+  // 分页状态
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [hasMore, setHasMore] = useState(true);
+  const PAGE_SIZE = 50;
+  
+  // 滚动容器引用
+  const scrollRef = useRef<HTMLDivElement>(null);
+  
   // 视频播放器状态
   const [isVideoPlayerOpen, setIsVideoPlayerOpen] = useState(false);
   const [currentVideoUrl, setCurrentVideoUrl] = useState<string>("");
@@ -79,85 +89,106 @@ export function MainContent({ viewType, searchQuery = "" }: MainContentProps) {
     setCurrentVideoTitle("");
   };
 
-  // 获取文件列表
-  useEffect(() => {
-    const fetchFiles = async () => {
-      try {
-        setLoading(true);
-        
-        // 将 viewType 转换为后端 file_type 参数
-        let fileTypeParam: string | undefined;
-        
-        // 如果有搜索关键词，使用 search 参数
-        if (searchQuery) {
-          const searchUrl = `${FILES_API}?search=${encodeURIComponent(searchQuery)}`;
-          const searchResponse = await authFetch(searchUrl);
-          if (!searchResponse.ok) {
-            throw new Error("Failed to search files");
-          }
-          const searchResult = await searchResponse.json();
-          
-          const token = localStorage.getItem("token");
-          const mediaItems: MediaItem[] = searchResult.files.map((file: any) => ({
-            id: String(file.id),
-            thumbnail: file.thumbnail 
-              ? `${file.thumbnail}?token=${token}`
-              : file.url 
-                ? `${file.url}?token=${token}` 
-                : `https://picsum.photos/seed/${file.id}/400/400`,
-            videoUrl: file.mime_type?.startsWith("video/") && file.url ? `${file.url}?token=${token}` : undefined,
-            type: file.mime_type?.startsWith("video/") ? "video" : "image",
-            title: file.file_name,
-            date: new Date(file.created_at).toISOString().split("T")[0],
-          }));
-          
-          setFiles(mediaItems);
-          setError(null);
-          return;
-        }
-        
-        switch (viewType) {
-          case "videos":
-            fileTypeParam = "video";
-            break;
-          case "photos":
-          case "gifs":
-          case "live-photos":
-            fileTypeParam = "image";
-            break;
-          default:
-            fileTypeParam = undefined;
-        }
-        
-        const response = await getFileList(fileTypeParam);
-        
-        // 将 API 返回的文件转换为 MediaItem 格式
-        const token = localStorage.getItem("token");
-        const mediaItems: MediaItem[] = response.files.map((file) => ({
-          id: String(file.id),
-          // 优先使用缩略图，其次使用原图，最后使用占位图
-          thumbnail: file.thumbnail 
-            ? `${file.thumbnail}?token=${token}`
-            : file.url 
-              ? `${file.url}?token=${token}` 
-              : `https://picsum.photos/seed/${file.id}/400/400`,
-          videoUrl: file.mime_type?.startsWith("video/") && file.url ? `${file.url}?token=${token}` : undefined,
-          type: file.mime_type?.startsWith("video/") ? "video" : "image",
-          title: file.file_name,
-          date: new Date(file.created_at).toISOString().split("T")[0],
-        }));
-        
-        setFiles(mediaItems);
-        setError(null);
-      } catch (err) {
-        console.error("Failed to fetch files:", err);
-        setError("Failed to load files");
-      } finally {
-        setLoading(false);
-      }
-    };
+  // 转换文件为 MediaItem 格式
+  const convertToMediaItems = useCallback((files: any[], responseTotal?: number) => {
+    const token = localStorage.getItem("token");
+    const items: MediaItem[] = files.map((file) => ({
+      id: String(file.id),
+      thumbnail: file.thumbnail 
+        ? `${file.thumbnail}?token=${token}`
+        : file.url 
+          ? `${file.url}?token=${token}` 
+          : `https://picsum.photos/seed/${file.id}/400/400`,
+      videoUrl: file.mime_type?.startsWith("video/") && file.url ? `${file.url}?token=${token}` : undefined,
+      type: file.mime_type?.startsWith("video/") ? "video" : "image",
+      title: file.file_name,
+      date: new Date(file.created_at).toISOString().split("T")[0],
+    }));
+    
+    const total = responseTotal ?? files.length;
+    const totalPages = Math.ceil(total / PAGE_SIZE);
+    
+    return { items, total, totalPages };
+  }, []);
 
-    fetchFiles();
+  // 获取文件列表
+  const fetchFiles = useCallback(async (reset: boolean = false, page: number = 1) => {
+    try {
+      setLoading(true);
+      
+      // 如果有搜索关键词，使用搜索参数
+      if (searchQuery) {
+        const searchUrl = `${FILES_API}?search=${encodeURIComponent(searchQuery)}&page_size=100`;
+        const searchResponse = await authFetch(searchUrl);
+        if (!searchResponse.ok) {
+          throw new Error("Failed to search files");
+        }
+        const searchResult = await searchResponse.json();
+        
+        const files = (searchResult.files || []).slice(0, 100);
+        const { items } = convertToMediaItems(files);
+        setFiles(items);
+        setTotalPages(1);
+        setCurrentPage(1);
+        setHasMore(false);
+        return;
+      }
+      
+      // 确定文件类型参数
+      let fileTypeParam: string | undefined;
+      switch (viewType) {
+        case "videos":
+          fileTypeParam = "video";
+          break;
+        case "photos":
+        case "gifs":
+        case "live-photos":
+          fileTypeParam = "image";
+          break;
+        default:
+          fileTypeParam = undefined;
+      }
+      
+      const response = await getFileList({ 
+        type: fileTypeParam, 
+        page: page,
+        pageSize: PAGE_SIZE 
+      });
+      
+      const { items, total, totalPages: respTotalPages } = convertToMediaItems(response.files, response.total);
+      
+      if (reset) {
+        setFiles(items);
+        setCurrentPage(1);
+      } else {
+        setFiles((prev) => [...prev, ...items]);
+      }
+      setTotalPages(respTotalPages);
+      setHasMore(page < respTotalPages);
+      setError(null);
+    } catch (err) {
+      console.error("Failed to fetch files:", err);
+      setError("Failed to load files");
+    } finally {
+      setLoading(false);
+    }
+  }, [viewType, searchQuery, convertToMediaItems]);
+
+  // 加载更多数据
+  const loadMoreData = useCallback(() => {
+    if (!loading && currentPage < totalPages) {
+      const nextPage = currentPage + 1;
+      fetchFiles(false, nextPage);
+      setCurrentPage(nextPage);
+    }
+  }, [loading, currentPage, totalPages, fetchFiles]);
+
+  // 初始加载
+  useEffect(() => {
+    setFiles([]);
+    setCurrentPage(1);
+    setHasMore(true);
+    fetchFiles(true, 1);
   }, [viewType, searchQuery]);
 
   const getTitle = () => {
@@ -188,17 +219,12 @@ export function MainContent({ viewType, searchQuery = "" }: MainContentProps) {
   };
 
   // 加载状态
-  if (loading) {
+  if (loading && files.length === 0) {
     return (
       <main
-        className={cn(
-          "overflow-y-auto bg-default-50 transition-all duration-300",
-          "fixed left-0 right-0",
-          "md:left-64",
-          "top-16 bottom-0 md:bottom-0",
-          "p-4 md:p-6",
-          "pb-24 md:pb-6"
-        )}
+        id="scrollableDiv"
+        ref={scrollRef}
+        className="overflow-y-auto bg-default-50 dark:bg-default-900 transition-all duration-300 fixed left-0 right-0 md:left-64 top-16 bottom-0 md:bottom-0 p-4 md:p-6 pb-24 md:pb-6"
       >
         <div className="flex flex-col items-center justify-center h-full">
           <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin" />
@@ -212,14 +238,9 @@ export function MainContent({ viewType, searchQuery = "" }: MainContentProps) {
   if (error) {
     return (
       <main
-        className={cn(
-          "overflow-y-auto bg-default-50 transition-all duration-300",
-          "fixed left-0 right-0",
-          "md:left-64",
-          "top-16 bottom-0 md:bottom-0",
-          "p-4 md:p-6",
-          "pb-24 md:pb-6"
-        )}
+        id="scrollableDiv"
+        ref={scrollRef}
+        className="overflow-y-auto bg-default-50 dark:bg-default-900 transition-all duration-300 fixed left-0 right-0 md:left-64 top-16 bottom-0 md:bottom-0 p-4 md:p-6 pb-24 md:pb-6"
       >
         <div className="flex flex-col items-center justify-center h-full">
           <p className="text-danger">{error}</p>
@@ -230,14 +251,9 @@ export function MainContent({ viewType, searchQuery = "" }: MainContentProps) {
 
   return (
     <main
-      className={cn(
-        "overflow-y-auto bg-default-50 transition-all duration-300",
-        "fixed left-0 right-0",
-        "md:left-64",
-        "top-16 bottom-0 md:bottom-0",
-        "p-4 md:p-6",
-        "pb-24 md:pb-6"
-      )}
+      id="scrollableDiv"
+      ref={scrollRef}
+      className="overflow-y-auto bg-default-50 dark:bg-default-900 transition-all duration-300 fixed left-0 right-0 md:left-64 top-16 bottom-0 md:bottom-0 p-4 md:p-6 pb-24 md:pb-6"
     >
       {/* Header */}
       <div className="flex items-center justify-between mb-4">
@@ -247,7 +263,6 @@ export function MainContent({ viewType, searchQuery = "" }: MainContentProps) {
         </div>
         
         <div className="flex items-center gap-2">
-          
           {/* Desktop: Full controls */}
           <div className="hidden md:flex items-center gap-2">
             <Button
@@ -315,114 +330,137 @@ export function MainContent({ viewType, searchQuery = "" }: MainContentProps) {
             选择文件上传
           </Button>
         </div>
-      ) : viewMode === "grid" ? (
-        /* Grid View */
-        <PhotoProvider>
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2 md:gap-4">
-            {files.map((item) => (
-              <Card
-                key={item.id}
-                shadow="sm"
-                className="aspect-square overflow-hidden group"
-              >
-                <CardBody className="p-0">
-                  <div className="relative w-full h-full overflow-hidden">
-                    {item.type === "video" ? (
-                      <div 
-                        className="w-full h-full cursor-pointer"
-                        onClick={() => item.videoUrl && openVideoPlayer(item.videoUrl, item.title)}
-                      >
-                        <VideoThumbnail src={item.videoUrl} poster={item.thumbnail} />
-                      </div>
-                    ) : (
-                      <PhotoView src={item.thumbnail}>
-                        <img
-                          src={item.thumbnail}
-                          alt={item.title}
-                          className="w-full h-full object-cover transition-transform group-hover:scale-105 cursor-pointer"
-                          loading="lazy"
-                        />
-                      </PhotoView>
-                    )}
-                    {item.type === "video" && (
-                      <div className="absolute top-1 right-1 md:top-2 md:right-2">
-                        <Chip
-                          size="sm"
-                          color="default"
-                          variant="flat"
-                          className="bg-black/60 text-white text-xs"
-                        >
-                          视频
-                        </Chip>
-                      </div>
-                    )}
-                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors pointer-events-none" />
-                  </div>
-                </CardBody>
-              </Card>
-            ))}
-          </div>
-        </PhotoProvider>
       ) : (
-        /* List View */
-        <PhotoProvider>
-          <div className="space-y-6">
-            {groupMediaByDate(files).map(([date, items]) => (
-              <div key={date}>
-                {/* Date Header */}
-                <div className="sticky top-0 z-10 bg-default-50/95 backdrop-blur-sm py-2 mb-3">
-                  <h3 className="text-sm font-semibold text-default-600">{date}</h3>
-                </div>
-                
-                {/* Media Grid for this date */}
-                <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-2">
-                  {items.map((item) => (
-                    <Card
-                      key={item.id}
-                      shadow="sm"
-                      className="aspect-square overflow-hidden group"
-                    >
-                      <CardBody className="p-0">
-                        <div className="relative w-full h-full overflow-hidden">
-                          {item.type === "video" ? (
-                            <div 
-                              className="w-full h-full cursor-pointer"
-                              onClick={() => item.videoUrl && openVideoPlayer(item.videoUrl, item.title)}
-                            >
-                              <VideoThumbnail src={item.videoUrl} poster={item.thumbnail} />
-                            </div>
-                          ) : (
-                            <PhotoView src={item.thumbnail}>
-                              <img
-                                src={item.thumbnail}
-                                alt={item.title}
-                                className="w-full h-full object-cover transition-transform group-hover:scale-105 cursor-pointer"
-                                loading="lazy"
-                              />
-                            </PhotoView>
-                          )}
-                          {item.type === "video" && (
-                            <div className="absolute top-1 right-1">
-                              <Chip
-                                size="sm"
-                                color="default"
-                                variant="flat"
-                                className="bg-black/60 text-white text-xs"
-                              >
-                                视频
-                              </Chip>
-                            </div>
-                          )}
-                          <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors pointer-events-none" />
-                        </div>
-                      </CardBody>
-                    </Card>
-                  ))}
-                </div>
+        <InfiniteScroll
+          dataLength={files.length}
+          next={loadMoreData}
+          hasMore={hasMore}
+          loader={
+            <div className="flex justify-center items-center py-4">
+              <Spinner size="sm" color="primary" />
+              <span className="ml-2 text-sm text-default-500">加载更多...</span>
+            </div>
+          }
+          endMessage={
+            files.length >= PAGE_SIZE ? (
+              <div className="flex justify-center items-center py-4 mt-4 text-sm text-default-400">
+                已加载全部 {files.length} 个项目
               </div>
-            ))}
-          </div>
-        </PhotoProvider>
+            ) : null
+          }
+          scrollableTarget="scrollableDiv"
+          style={{ overflow: 'visible' }}
+        >
+          {viewMode === "grid" ? (
+            /* Grid View */
+            <PhotoProvider>
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2 md:gap-4">
+                {files.map((item) => (
+                  <Card
+                    key={item.id}
+                    shadow="sm"
+                    className="aspect-square overflow-hidden group"
+                  >
+                    <CardBody className="p-0">
+                      <div className="relative w-full h-full overflow-hidden">
+                        {item.type === "video" ? (
+                          <div 
+                            className="w-full h-full cursor-pointer"
+                            onClick={() => item.videoUrl && openVideoPlayer(item.videoUrl, item.title)}
+                          >
+                            <VideoThumbnail src={item.videoUrl} poster={item.thumbnail} />
+                          </div>
+                        ) : (
+                          <PhotoView src={item.thumbnail}>
+                            <img
+                              src={item.thumbnail}
+                              alt={item.title}
+                              className="w-full h-full object-cover transition-transform group-hover:scale-105 cursor-pointer"
+                              loading="lazy"
+                            />
+                          </PhotoView>
+                        )}
+                        {item.type === "video" && (
+                          <div className="absolute top-1 right-1 md:top-2 md:right-2">
+                            <Chip
+                              size="sm"
+                              color="default"
+                              variant="flat"
+                              className="bg-black/60 text-white text-xs"
+                            >
+                              视频
+                            </Chip>
+                          </div>
+                        )}
+                        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors pointer-events-none" />
+                      </div>
+                    </CardBody>
+                  </Card>
+                ))}
+              </div>
+            </PhotoProvider>
+          ) : (
+            /* List View */
+            <PhotoProvider>
+              <div className="space-y-6">
+                {groupMediaByDate(files).map(([date, items]) => (
+                  <div key={date}>
+                    {/* Date Header */}
+                    <div className="sticky top-0 z-10 bg-default-50/95 dark:bg-default-900/95 backdrop-blur-sm py-2 mb-3">
+                      <h3 className="text-sm font-semibold text-default-600">{date}</h3>
+                    </div>
+                    
+                    {/* Media Grid for this date */}
+                    <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-2">
+                      {items.map((item) => (
+                        <Card
+                          key={item.id}
+                          shadow="sm"
+                          className="aspect-square overflow-hidden group"
+                        >
+                          <CardBody className="p-0">
+                            <div className="relative w-full h-full overflow-hidden">
+                              {item.type === "video" ? (
+                                <div 
+                                  className="w-full h-full cursor-pointer"
+                                  onClick={() => item.videoUrl && openVideoPlayer(item.videoUrl, item.title)}
+                                >
+                                  <VideoThumbnail src={item.videoUrl} poster={item.thumbnail} />
+                                </div>
+                              ) : (
+                                <PhotoView src={item.thumbnail}>
+                                  <img
+                                    src={item.thumbnail}
+                                    alt={item.title}
+                                    className="w-full h-full object-cover transition-transform group-hover:scale-105 cursor-pointer"
+                                    loading="lazy"
+                                  />
+                                </PhotoView>
+                              )}
+                              {item.type === "video" && (
+                                <div className="absolute top-1 right-1">
+                                  <Chip
+                                    size="sm"
+                                    color="default"
+                                    variant="flat"
+                                    className="bg-black/60 text-white text-xs"
+                                  >
+                                    视频
+                                  </Chip>
+                                </div>
+                              )}
+                              <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors pointer-events-none" />
+                            </div>
+                          </CardBody>
+                        </Card>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </PhotoProvider>
+          )}
+        </InfiniteScroll>
       )}
 
       {/* 视频播放器模态框 */}
@@ -435,6 +473,3 @@ export function MainContent({ viewType, searchQuery = "" }: MainContentProps) {
     </main>
   );
 }
-
-// Helper for cn
-import { cn } from "@heroui/react";

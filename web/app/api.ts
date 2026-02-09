@@ -116,7 +116,11 @@ export async function checkFileHashExists(hash: string): Promise<{ exists: boole
 }
 
 // 获取文件列表（需要认证）
-export async function getFileList(type?: string): Promise<{
+export async function getFileList(params?: {
+  type?: string;
+  page?: number;
+  pageSize?: number;
+}): Promise<{
   files: Array<{
     id: number;
     file_name: string;
@@ -128,11 +132,23 @@ export async function getFileList(type?: string): Promise<{
     created_at: string;
     updated_at: string;
   }>;
+  total: number;
+  page: number;
+  page_size: number;
+  total_pages: number;
 }> {
-  let url = FILES_API;
-  if (type) {
-    url += `?file_type=${type}`;
+  const searchParams = new URLSearchParams();
+  if (params?.type) {
+    searchParams.set("file_type", params.type);
   }
+  if (params?.page) {
+    searchParams.set("page", params.page.toString());
+  }
+  if (params?.pageSize) {
+    searchParams.set("page_size", params.pageSize.toString());
+  }
+  
+  const url = `${FILES_API}${searchParams.toString() ? `?${searchParams.toString()}` : ""}`;
   const response = await authFetch(url);
   if (!response.ok) {
     throw new Error("Failed to get file list");

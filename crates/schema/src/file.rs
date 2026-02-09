@@ -49,6 +49,7 @@ pub struct FileListResponse {
 
 #[derive(Deserialize)]
 pub struct ListFilesQuery {
+    pub path: Option<String>,
     pub page: Option<u64>,
     pub page_size: Option<u64>,
     pub sort_by: Option<String>,

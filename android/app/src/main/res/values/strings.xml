@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">HomeDrive</string>
+
+    <!-- Login -->
+    <string name="login_title">登录 HomeDrive</string>
+    <string name="server_url">服务器地址</string>
+    <string name="server_url_hint">例如: http://your-server.com</string>
+    <string name="username">用户名</string>
+    <string name="password">密码</string>
+    <string name="hide_password">隐藏密码</string>
+    <string name="show_password">显示密码</string>
+    <string name="login">登录</string>
+    <string name="logout">退出登录</string>
+    <string name="logout_confirmation">确定要退出登录吗？</string>
+
+    <!-- Navigation -->
+    <string name="back">返回</string>
+    <string name="refresh">刷新</string>
+    <string name="search">搜索</string>
+    <string name="search_files">搜索文件</string>
+
+    <!-- Gallery -->
+    <string name="gallery">图库</string>
+    <string name="empty_folder">文件夹为空</string>
+    <string name="error_loading">加载失败</string>
+    <string name="retry">重试</string>
+
+    <!-- Albums -->
+    <string name="albums">图集</string>
+    <string name="empty_albums">暂无图集</string>
+    <string name="photo_count">%d 张照片</string>
+
+    <!-- Share -->
+    <string name="shares">分享</string>
+    <string name="empty_shares">暂无分享</string>
+    <string name="create_share">创建分享</string>
+    <string name="share_link">分享链接: %s</string>
+    <string name="expires_at">过期时间: %s</string>
+    <string name="permissions">权限: %s</string>
+    <string name="delete">删除</string>
+    <string name="select_users">选择分享用户</string>
+    <string name="no_available_users">暂无可分享用户</string>
+    <string name="confirm">确认</string>
+    <string name="cancel">取消</string>
+
+    <!-- Upload -->
+    <string name="upload">上传</string>
+    <string name="select_images">选择图片</string>
+    <string name="select_videos">选择视频</string>
+    <string name="selected_files">已选择 %1$d 个文件</string>
+    <string name="select_files_hint">点击上方按钮选择要上传的文件</string>
+    <string name="upload_progress">正在上传 %1$d/%2$d</string>
+    <string name="success_count">成功: %1$d</string>
+    <string name="error_count">失败: %1$d</string>
+    <string name="clear_all">清空</string>
+    <string name="remove">移除</string>
+
+    <!-- Settings -->
+    <string name="settings">设置</string>
+    <string name="profile">个人信息</string>
+    <string name="change_password">修改密码</string>
+    <string name="old_password">旧密码</string>
+    <string name="new_password">新密码</string>
+    <string name="confirm_password">确认密码</string>
+    <string name="update_password">更新密码</string>
+
+    <!-- Media Viewer -->
+    <string name="share">分享</string>
+    <string name="download">下载</string>
+    <string name="info">信息</string>
+</resources>
