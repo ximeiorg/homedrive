@@ -265,37 +265,15 @@ class UploadRepository(
             val mimeType = file.extension.toMimeType() ?: "application/octet-stream"
             val requestBody = file.asRequestBody(mimeType.toMediaTypeOrNull())
             val multipart = MultipartBody.Part.createFormData("file", file.name, requestBody)
-            val pathBody = path.toRequestBody("text/plain".toMediaTypeOrNull())
 
-            val response = api.uploadFile(multipart, path)
+            val response = api.uploadFile(multipart)
             if (response.isSuccessful) {
                 response.body()?.let {
                     Result.success(it)
                 } ?: Result.failure(Exception("Empty response"))
             } else {
-                Result.failure(Exception("Upload failed: ${response.message()}"))
-            }
-        } catch (e: Exception) {
-            Result.failure(e)
-        }
-    }
-
-    suspend fun uploadFiles(files: List<File>, path: String = "/"): Result<List<UploadResponse>> {
-        return try {
-            val parts = files.map { file ->
-                val mimeType = file.extension.toMimeType() ?: "application/octet-stream"
-                val requestBody = file.asRequestBody(mimeType.toMediaTypeOrNull())
-                MultipartBody.Part.createFormData("files[]", file.name, requestBody)
-            }
-            val pathBody = path.toRequestBody("text/plain".toMediaTypeOrNull())
-
-            val response = api.uploadFiles(parts, path)
-            if (response.isSuccessful) {
-                response.body()?.let {
-                    Result.success(it)
-                } ?: Result.failure(Exception("Empty response"))
-            } else {
-                Result.failure(Exception("Upload failed: ${response.message()}"))
+                val errorBody = response.errorBody()?.string() ?: "Unknown error"
+                Result.failure(Exception("Upload failed: ${response.code()} - $errorBody"))
             }
         } catch (e: Exception) {
             Result.failure(e)

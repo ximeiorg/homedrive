@@ -80,9 +80,9 @@ fun UploadScreen(
                 .fillMaxSize()
                 .padding(paddingValues)
                 .padding(horizontal = 20.dp, vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(20.dp)
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // Action Buttons
+            // 选择文件按钮
             UploadSection(title = "选择文件") {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -97,16 +97,16 @@ fun UploadScreen(
                         Column(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(20.dp),
+                                .padding(16.dp),
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
                             Icon(
                                 Icons.Default.Image,
                                 contentDescription = null,
-                                modifier = Modifier.size(32.dp),
+                                modifier = Modifier.size(28.dp),
                                 tint = MaterialTheme.colorScheme.primary
                             )
-                            Spacer(modifier = Modifier.height(8.dp))
+                            Spacer(modifier = Modifier.height(6.dp))
                             Text(
                                 "选择图片",
                                 style = MaterialTheme.typography.bodyMedium,
@@ -124,16 +124,16 @@ fun UploadScreen(
                         Column(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(20.dp),
+                                .padding(16.dp),
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
                             Icon(
                                 Icons.Default.VideoLibrary,
                                 contentDescription = null,
-                                modifier = Modifier.size(32.dp),
+                                modifier = Modifier.size(28.dp),
                                 tint = MaterialTheme.colorScheme.secondary
                             )
-                            Spacer(modifier = Modifier.height(8.dp))
+                            Spacer(modifier = Modifier.height(6.dp))
                             Text(
                                 "选择视频",
                                 style = MaterialTheme.typography.bodyMedium,
@@ -144,8 +144,8 @@ fun UploadScreen(
                 }
             }
 
-            // Upload Progress
-            if (uiState.isUploading || uiState.files.isNotEmpty()) {
+            // 上传进度（只在有文件时显示）
+            if (uiState.files.isNotEmpty()) {
                 UploadSection(title = "上传进度") {
                     Surface(
                         shape = RoundedCornerShape(20.dp),
@@ -160,60 +160,65 @@ fun UploadScreen(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Text(
-                                    text = "正在上传 ${uiState.currentFileIndex + 1} / ${uiState.files.size}",
+                                    text = if (uiState.isUploading) "正在上传 ${uiState.currentFileIndex + 1} / ${uiState.files.size}"
+                                           else "已选择 ${uiState.files.size} 个文件",
                                     style = MaterialTheme.typography.titleSmall
                                 )
-                                Text(
-                                    text = "${uiState.uploadProgress}%",
-                                    style = MaterialTheme.typography.titleSmall,
-                                    color = MaterialTheme.colorScheme.primary
-                                )
-                            }
-
-                            Spacer(modifier = Modifier.height(12.dp))
-
-                            LinearProgressIndicator(
-                                progress = { uiState.uploadProgress / 100f },
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(6.dp),
-                                color = MaterialTheme.colorScheme.primary,
-                                trackColor = MaterialTheme.colorScheme.surfaceVariant,
-                            )
-
-                            Spacer(modifier = Modifier.height(12.dp))
-
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(16.dp)
-                            ) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Icon(
-                                        Icons.Default.Check,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(16.dp),
-                                        tint = MaterialTheme.colorScheme.primary
-                                    )
-                                    Spacer(modifier = Modifier.width(4.dp))
+                                if (uiState.isUploading) {
                                     Text(
-                                        text = "成功: ${uiState.successCount}",
-                                        style = MaterialTheme.typography.bodySmall,
+                                        text = "${uiState.uploadProgress}%",
+                                        style = MaterialTheme.typography.titleSmall,
                                         color = MaterialTheme.colorScheme.primary
                                     )
                                 }
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Icon(
-                                        Icons.Default.Error,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(16.dp),
-                                        tint = MaterialTheme.colorScheme.error
-                                    )
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Text(
-                                        text = "失败: ${uiState.errorCount}",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.error
-                                    )
+                            }
+
+                            if (uiState.isUploading) {
+                                Spacer(modifier = Modifier.height(12.dp))
+
+                                LinearProgressIndicator(
+                                    progress = { uiState.uploadProgress / 100f },
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(6.dp),
+                                    color = MaterialTheme.colorScheme.primary,
+                                    trackColor = MaterialTheme.colorScheme.surfaceVariant,
+                                )
+
+                                Spacer(modifier = Modifier.height(12.dp))
+
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(16.dp)
+                                ) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(
+                                            Icons.Default.Check,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(16.dp),
+                                            tint = MaterialTheme.colorScheme.primary
+                                        )
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Text(
+                                            text = "成功: ${uiState.successCount}",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.primary
+                                        )
+                                    }
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(
+                                            Icons.Default.Error,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(16.dp),
+                                            tint = MaterialTheme.colorScheme.error
+                                        )
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Text(
+                                            text = "失败: ${uiState.errorCount}",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.error
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -221,49 +226,44 @@ fun UploadScreen(
                 }
             }
 
-            // File List
+            // 文件列表（可滚动）
             if (uiState.files.isNotEmpty()) {
-                UploadSection(title = "已选择 ${uiState.files.size} 个文件") {
-                    LazyColumn(
-                        modifier = Modifier.weight(1f),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        itemsIndexed(uiState.files, key = { index, file -> "$index-${file.name}" }) { index, file ->
-                            UploadFileItem(
-                                file = file,
-                                onRemove = { viewModel.removeFile(index) }
-                            )
-                        }
+                LazyColumn(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    itemsIndexed(uiState.files, key = { index, file -> "$index-${file.name}" }) { index, file ->
+                        UploadFileItem(
+                            file = file,
+                            onRemove = { viewModel.removeFile(index) }
+                        )
                     }
                 }
+            }
 
-                // Action Buttons
+            // 底部操作按钮（始终显示在有文件时）
+            if (uiState.files.isNotEmpty()) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    Surface(
+                    // 清空按钮
+                    OutlinedButton(
                         onClick = { viewModel.clearAllFiles() },
                         modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(24.dp),
-                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                        enabled = !uiState.isUploading
+                        enabled = !uiState.isUploading,
+                        shape = RoundedCornerShape(24.dp)
                     ) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(16.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                "清空列表",
-                                style = MaterialTheme.typography.titleMedium,
-                                color = if (!uiState.isUploading) MaterialTheme.colorScheme.onSurface
-                                       else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
-                            )
-                        }
+                        Icon(
+                            Icons.Default.DeleteSweep,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("清空列表")
                     }
 
+                    // 开始上传按钮
                     Button(
                         onClick = { viewModel.startUpload() },
                         modifier = Modifier.weight(1f),
@@ -279,7 +279,11 @@ fun UploadScreen(
                             Spacer(modifier = Modifier.width(8.dp))
                             Text("上传中...")
                         } else {
-                            Icon(Icons.Default.Upload, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Icon(
+                                Icons.Default.Upload,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp)
+                            )
                             Spacer(modifier = Modifier.width(8.dp))
                             Text("开始上传")
                         }
@@ -287,7 +291,7 @@ fun UploadScreen(
                 }
             }
 
-            // Empty State
+            // 空状态
             if (uiState.files.isEmpty() && !uiState.isUploading) {
                 Spacer(modifier = Modifier.weight(1f))
                 Box(
@@ -341,7 +345,7 @@ private fun UploadSection(
             text = title,
             style = MaterialTheme.typography.titleSmall,
             color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.padding(start = 4.dp, bottom = 12.dp)
+            modifier = Modifier.padding(start = 4.dp, bottom = 8.dp)
         )
         content()
     }
@@ -360,7 +364,7 @@ private fun UploadFileItem(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp),
+                .padding(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Surface(
@@ -370,7 +374,7 @@ private fun UploadFileItem(
                     file.type.startsWith("video") -> MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f)
                     else -> MaterialTheme.colorScheme.surfaceVariant
                 },
-                modifier = Modifier.size(44.dp)
+                modifier = Modifier.size(40.dp)
             ) {
                 Box(contentAlignment = Alignment.Center) {
                     Icon(
@@ -380,7 +384,7 @@ private fun UploadFileItem(
                             else -> Icons.AutoMirrored.Filled.InsertDriveFile
                         },
                         contentDescription = null,
-                        modifier = Modifier.size(22.dp),
+                        modifier = Modifier.size(20.dp),
                         tint = when {
                             file.type.startsWith("image") -> MaterialTheme.colorScheme.primary
                             file.type.startsWith("video") -> MaterialTheme.colorScheme.secondary
@@ -408,7 +412,7 @@ private fun UploadFileItem(
                 )
 
                 if (file.state == UploadState.UPLOADING) {
-                    Spacer(modifier = Modifier.height(8.dp))
+                    Spacer(modifier = Modifier.height(6.dp))
                     LinearProgressIndicator(
                         progress = { file.progress / 100f },
                         modifier = Modifier

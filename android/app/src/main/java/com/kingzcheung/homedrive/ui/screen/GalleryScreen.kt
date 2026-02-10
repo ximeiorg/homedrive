@@ -19,6 +19,7 @@ import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.VideoLibrary
 import androidx.compose.material3.*
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -29,7 +30,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import coil.compose.AsyncImage
 import coil.compose.SubcomposeAsyncImage
 import coil.request.ImageRequest
 import com.kingzcheung.homedrive.R
@@ -114,116 +114,139 @@ fun GalleryScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val gridState = rememberLazyGridState()
+    var isRefreshing by remember { mutableStateOf(false) }
 
-    Column(modifier = modifier.fillMaxSize()) {
-        // 加载状态
-        when {
-            uiState.isLoading -> {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .weight(1f),
-                    contentAlignment = Alignment.Center
-                ) {
-                    CircularProgressIndicator()
-                }
-            }
-            uiState.error != null -> {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .weight(1f),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Text(
-                            text = uiState.error!!,
-                            color = MaterialTheme.colorScheme.error,
-                            textAlign = TextAlign.Center
-                        )
-                        Spacer(modifier = Modifier.height(16.dp))
-                        Button(onClick = { viewModel.refresh() }) {
-                            Text("重试")
+    // 处理刷新状态
+    LaunchedEffect(uiState.isLoading) {
+        if (!uiState.isLoading) {
+            isRefreshing = false
+        }
+    }
+
+    Box(modifier = modifier.fillMaxSize()) {
+        PullToRefreshBox(
+            isRefreshing = isRefreshing,
+            onRefresh = {
+                isRefreshing = true
+                viewModel.refresh()
+            },
+            modifier = Modifier.fillMaxSize()
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(top = 96.dp) // 为状态栏和顶部导航栏留出空间
+            ) {
+                // 加载状态
+                when {
+                    uiState.isLoading && uiState.files.isEmpty() -> {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .weight(1f),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            CircularProgressIndicator()
                         }
                     }
-                }
-            }
-            uiState.files.isEmpty() -> {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .weight(1f),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.PhotoLibrary,
-                            contentDescription = null,
-                            modifier = Modifier.size(64.dp),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Spacer(modifier = Modifier.height(16.dp))
-                        Text(
-                            text = "暂无文件",
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-            }
-            else -> {
-                // 照片墙网格布局 - 固定4列
-                Box(modifier = Modifier.weight(1f)) {
-                    LazyVerticalGrid(
-                        columns = GridCells.Fixed(4),
-                        contentPadding = PaddingValues(2.dp),
-                        state = gridState,
-                        modifier = Modifier.fillMaxSize()
-                    ) {
-                        items(uiState.files, key = { it.id }) { file ->
-                            FileGridItem(
-                                file = file,
-                                isSelected = false,
-                                onClick = {
-                                    when (file.type) {
-                                        FileType.FOLDER -> {
-                                            viewModel.navigateToFolder(file)
-                                        }
-                                        else -> onFileClick(file)
-                                    }
-                                },
-                                onLongClick = { /* Handle selection */ }
-                            )
-                        }
-                        
-                        // 加载更多指示器
-                        if (uiState.isLoadingMore) {
-                            item {
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(16.dp),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    CircularProgressIndicator(
-                                        modifier = Modifier.size(24.dp),
-                                        strokeWidth = 2.dp
-                                    )
+                    uiState.error != null && uiState.files.isEmpty() -> {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .weight(1f),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Text(
+                                    text = uiState.error!!,
+                                    color = MaterialTheme.colorScheme.error,
+                                    textAlign = TextAlign.Center
+                                )
+                                Spacer(modifier = Modifier.height(16.dp))
+                                Button(onClick = { viewModel.refresh() }) {
+                                    Text("重试")
                                 }
                             }
                         }
                     }
-                    
-                    // 监听滚动状态
-                    ScrollHandler(
-                        gridState = gridState,
-                        onLoadMore = { viewModel.loadMore() },
-                        onScrollProgressChange = onScrollProgressChange
-                    )
+                    uiState.files.isEmpty() -> {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .weight(1f),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.PhotoLibrary,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(64.dp),
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Spacer(modifier = Modifier.height(16.dp))
+                                Text(
+                                    text = "暂无文件",
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    }
+                    else -> {
+                        // 照片墙网格布局 - 固定4列
+                        Box(modifier = Modifier.weight(1f)) {
+                            LazyVerticalGrid(
+                                columns = GridCells.Fixed(4),
+                                contentPadding = PaddingValues(2.dp),
+                                state = gridState,
+                                modifier = Modifier.fillMaxSize()
+                            ) {
+                                items(uiState.files, key = { it.id }) { file ->
+                                    FileGridItem(
+                                        file = file,
+                                        isSelected = false,
+                                        onClick = {
+                                            when (file.type) {
+                                                FileType.FOLDER -> {
+                                                    viewModel.navigateToFolder(file)
+                                                }
+                                                else -> onFileClick(file)
+                                            }
+                                        },
+                                        onLongClick = { /* Handle selection */ }
+                                    )
+                                }
+                                
+                                // 加载更多指示器
+                                if (uiState.isLoadingMore) {
+                                    item {
+                                        Box(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(16.dp),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            CircularProgressIndicator(
+                                                modifier = Modifier.size(24.dp),
+                                                strokeWidth = 2.dp
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                            
+                            // 监听滚动状态
+                            ScrollHandler(
+                                gridState = gridState,
+                                onLoadMore = { viewModel.loadMore() },
+                                onScrollProgressChange = onScrollProgressChange
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -367,19 +390,28 @@ fun FileGridItem(
                     )
                     
                     // 视频播放图标
-                    Box(
+                    Icon(
+                        Icons.Default.PlayArrow,
+                        contentDescription = null,
                         modifier = Modifier
                             .align(Alignment.Center)
                             .size(32.dp)
                             .background(
-                                MaterialTheme.colorScheme.surface.copy(alpha = 0.7f),
-                                MaterialTheme.shapes.small
+                                color = Color.Black.copy(alpha = 0.5f),
+                                shape = androidx.compose.foundation.shape.CircleShape
                             )
-                    ) {
+                            .padding(4.dp),
+                        tint = Color.White
+                    )
+                    
+                    if (isSelected) {
                         Icon(
-                            Icons.Default.PlayArrow,
+                            Icons.Default.CheckCircle,
                             contentDescription = null,
-                            modifier = Modifier.align(Alignment.Center)
+                            modifier = Modifier
+                                .align(Alignment.TopEnd)
+                                .padding(4.dp),
+                            tint = MaterialTheme.colorScheme.primary
                         )
                     }
                 }
@@ -394,7 +426,8 @@ fun FileGridItem(
                         Icon(
                             Icons.AutoMirrored.Filled.InsertDriveFile,
                             contentDescription = null,
-                            modifier = Modifier.size(32.dp)
+                            modifier = Modifier.size(32.dp),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(

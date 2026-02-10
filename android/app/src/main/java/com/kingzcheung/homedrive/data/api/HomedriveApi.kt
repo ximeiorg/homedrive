@@ -93,14 +93,6 @@ interface HomedriveApi {
     @Multipart
     @POST("files/upload")
     suspend fun uploadFile(
-        @Part file: MultipartBody.Part,
-        @Part("path") path: String = "/"
+        @Part file: MultipartBody.Part
     ): Response<UploadResponse>
-
-    @Multipart
-    @POST("files/upload")
-    suspend fun uploadFiles(
-        @Part files: List<MultipartBody.Part>,
-        @Part("path") path: String = "/"
-    ): Response<List<UploadResponse>>
 }
