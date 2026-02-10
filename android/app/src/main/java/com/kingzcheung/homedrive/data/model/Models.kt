@@ -12,10 +12,46 @@ data class LoginRequest(
 // 登录响应
 data class LoginResponse(
     @SerializedName("token") val token: String,
-    @SerializedName("member") val member: User?
+    @SerializedName("member") val member: Member?
 )
 
-// 用户模型
+// 用户/会员模型 - 匹配 API 返回格式
+data class Member(
+    @SerializedName("id") val id: Long,
+    @SerializedName("username") val username: String,
+    @SerializedName("avatar") val avatar: String? = null,
+    @SerializedName("storage_tag") val storageTag: String? = null,
+    @SerializedName("storage_used") val storageUsed: Long? = null,
+    @SerializedName("storage_total") val storageTotal: Long? = null,
+    @SerializedName("last_active") val lastActive: String? = null,
+    @SerializedName("status") val status: String? = null,
+    @SerializedName("created_at") val createdAt: String? = null
+) {
+    // 格式化存储使用情况
+    fun getStorageUsedFormatted(): String {
+        return formatBytes(storageUsed ?: 0)
+    }
+    
+    fun getStorageTotalFormatted(): String {
+        return formatBytes(storageTotal ?: 0)
+    }
+    
+    fun getStoragePercentage(): Int {
+        if (storageTotal == null || storageTotal == 0L) return 0
+        return ((storageUsed ?: 0) * 100 / storageTotal).toInt()
+    }
+    
+    private fun formatBytes(bytes: Long): String {
+        return when {
+            bytes < 1024 -> "$bytes B"
+            bytes < 1024 * 1024 -> String.format("%.1f KB", bytes / 1024.0)
+            bytes < 1024 * 1024 * 1024 -> String.format("%.1f MB", bytes / (1024.0 * 1024))
+            else -> String.format("%.1f GB", bytes / (1024.0 * 1024 * 1024))
+        }
+    }
+}
+
+// 用户模型 - 兼容旧代码
 data class User(
     @SerializedName("id") val id: Long,
     @SerializedName("username") val username: String,

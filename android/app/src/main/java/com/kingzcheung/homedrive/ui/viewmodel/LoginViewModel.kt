@@ -2,10 +2,9 @@ package com.kingzcheung.homedrive.ui.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.kingzcheung.homedrive.data.api.HomedriveApi
 import com.kingzcheung.homedrive.data.local.PreferencesManager
 import com.kingzcheung.homedrive.data.model.LoginResponse
-import com.kingzcheung.homedrive.data.model.User
+import com.kingzcheung.homedrive.data.model.Member
 import com.kingzcheung.homedrive.data.repository.AuthRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -19,7 +18,7 @@ data class LoginUiState(
     val isLoading: Boolean = false,
     val error: String? = null,
     val isLoggedIn: Boolean = false,
-    val currentUser: User? = null
+    val currentMember: Member? = null
 )
 
 class LoginViewModel(
@@ -70,7 +69,7 @@ class LoginViewModel(
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
                     isLoggedIn = true,
-                    currentUser = loginResponse.member
+                    currentMember = loginResponse.member
                 )
             }.onFailure { exception ->
                 _uiState.value = _uiState.value.copy(

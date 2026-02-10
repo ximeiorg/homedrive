@@ -4,6 +4,8 @@ import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.*
 import androidx.datastore.preferences.preferencesDataStore
+import com.google.gson.Gson
+import com.kingzcheung.homedrive.data.model.Member
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
@@ -12,12 +14,12 @@ private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(na
 
 class PreferencesManager(context: Context) {
     private val dataStore = context.dataStore
+    private val gson = Gson()
 
     companion object {
         private val SERVER_URL = stringPreferencesKey("server_url")
         private val TOKEN = stringPreferencesKey("token")
-        private val USERNAME = stringPreferencesKey("username")
-        private val USER_ID = longPreferencesKey("user_id")
+        private val MEMBER_JSON = stringPreferencesKey("member_json")
         private val IS_FIRST_LAUNCH = booleanPreferencesKey("is_first_launch")
     }
 
@@ -33,14 +35,14 @@ class PreferencesManager(context: Context) {
         preferences[TOKEN] != null
     }
 
-    val userInfo: Flow<UserInfo?> = dataStore.data.map { preferences ->
-        if (preferences[TOKEN] != null) {
-            UserInfo(
-                username = preferences[USERNAME] ?: "",
-                userId = preferences[USER_ID] ?: 0L
-            )
-        } else {
-            null
+    // 获取持久化的会员信息
+    val member: Flow<Member?> = dataStore.data.map { preferences ->
+        preferences[MEMBER_JSON]?.let { json ->
+            try {
+                gson.fromJson(json, Member::class.java)
+            } catch (e: Exception) {
+                null
+            }
         }
     }
 
@@ -68,10 +70,10 @@ class PreferencesManager(context: Context) {
         }
     }
 
-    suspend fun setUserInfo(username: String, userId: Long) {
+    // 保存完整的会员信息
+    suspend fun setMember(member: Member) {
         dataStore.edit { preferences ->
-            preferences[USERNAME] = username
-            preferences[USER_ID] = userId
+            preferences[MEMBER_JSON] = gson.toJson(member)
         }
     }
 
@@ -81,14 +83,10 @@ class PreferencesManager(context: Context) {
         }
     }
 
+    // 清除所有持久化数据（退出登录）
     suspend fun clearAll() {
         dataStore.edit { preferences ->
             preferences.clear()
         }
     }
 }
-
-data class UserInfo(
-    val username: String,
-    val userId: Long
-)

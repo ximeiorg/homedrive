@@ -2,9 +2,8 @@ package com.kingzcheung.homedrive.ui.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.kingzcheung.homedrive.data.api.HomedriveApi
 import com.kingzcheung.homedrive.data.local.PreferencesManager
-import com.kingzcheung.homedrive.data.model.User
+import com.kingzcheung.homedrive.data.model.Member
 import com.kingzcheung.homedrive.data.repository.AuthRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -12,7 +11,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
 data class SettingsUiState(
-    val currentUser: User? = null,
+    val currentMember: Member? = null,
     val serverUrl: String = "",
     val isLoading: Boolean = false,
     val isUpdating: Boolean = false,
@@ -29,25 +28,25 @@ class SettingsViewModel(
     val uiState: StateFlow<SettingsUiState> = _uiState.asStateFlow()
 
     init {
-        loadUserInfo()
+        loadMemberInfo()
         loadServerUrl()
     }
 
-    private fun loadUserInfo() {
+    private fun loadMemberInfo() {
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true)
 
-            authRepository.getCurrentUser()
-                .onSuccess { user ->
+            // 从持久化数据加载会员信息
+            authRepository.getMember()
+                .onSuccess { member ->
                     _uiState.value = _uiState.value.copy(
-                        currentUser = user,
+                        currentMember = member,
                         isLoading = false
                     )
                 }
-                .onFailure { exception ->
+                .onFailure {
                     _uiState.value = _uiState.value.copy(
-                        isLoading = false,
-                        error = exception.message
+                        isLoading = false
                     )
                 }
         }

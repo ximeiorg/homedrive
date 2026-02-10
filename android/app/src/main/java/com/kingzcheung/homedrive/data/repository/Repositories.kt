@@ -22,9 +22,9 @@ class AuthRepository(
                 response.body()?.let { loginResponse ->
                     preferencesManager.setServerUrl(serverUrl)
                     preferencesManager.setToken(loginResponse.token)
-                    // 保存用户信息（如果 member 为 null 则跳过）
-                    loginResponse.member?.let { user ->
-                        preferencesManager.setUserInfo(user.username, user.id)
+                    // 保存完整的会员信息
+                    loginResponse.member?.let { member ->
+                        preferencesManager.setMember(member)
                     }
                     Result.success(loginResponse)
                 } ?: Result.failure(Exception("Empty response"))
@@ -42,7 +42,22 @@ class AuthRepository(
         } catch (_: Exception) {
             // Ignore errors during logout
         }
+        // 清除所有持久化数据
         preferencesManager.clearAll()
+    }
+
+    // 从持久化数据获取会员信息
+    suspend fun getMember(): Result<Member> {
+        return try {
+            val member = preferencesManager.member.first()
+            if (member != null) {
+                Result.success(member)
+            } else {
+                Result.failure(Exception("No member data found"))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
     }
 
     suspend fun getCurrentUser(): Result<User> {

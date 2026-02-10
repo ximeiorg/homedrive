@@ -1,8 +1,13 @@
 package com.kingzcheung.homedrive.ui.screen
 
+import android.app.Activity
+import android.os.Build
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -12,8 +17,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import androidx.core.view.WindowCompat
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.NavHost
@@ -21,7 +29,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.kingzcheung.homedrive.R
-import com.kingzcheung.homedrive.data.model.FileItem
+import com.kingzcheung.homedrive.data.model.FileType
 import com.kingzcheung.homedrive.ui.viewmodel.*
 
 sealed class Screen(val route: String, val title: Int, val icon: androidx.compose.ui.graphics.vector.ImageVector) {
@@ -29,6 +37,7 @@ sealed class Screen(val route: String, val title: Int, val icon: androidx.compos
     object Albums : Screen("albums", R.string.albums, Icons.Default.Collections)
     object Shares : Screen("shares", R.string.shares, Icons.Default.Share)
     object Settings : Screen("settings", R.string.settings, Icons.Default.Settings)
+    object Upload : Screen("upload", R.string.upload, Icons.Default.Add)
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -45,6 +54,23 @@ fun HomeScreen(
     val navController = rememberNavController()
     val configuration = LocalConfiguration.current
     val isTv = configuration.screenWidthDp >= 840
+    val context = LocalContext.current
+    val view = LocalView.current
+
+    // 启用边缘到边缘显示
+    DisposableEffect(Unit) {
+        val window = (context as? android.app.Activity)?.window
+        window?.let {
+            WindowCompat.setDecorFitsSystemWindows(it, false)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                it.insetsController?.setSystemBarsAppearance(
+                    android.view.WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS,
+                    android.view.WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS
+                )
+            }
+        }
+        onDispose { }
+    }
 
     val bottomNavItems = listOf(
         Screen.Gallery,
@@ -60,7 +86,7 @@ fun HomeScreen(
     
     // 获取当前文件列表
     val galleryUiState by galleryViewModel.uiState.collectAsState()
-    val mediaFiles = galleryUiState.files.filter { it.type == com.kingzcheung.homedrive.data.model.FileType.IMAGE || it.type == com.kingzcheung.homedrive.data.model.FileType.VIDEO }
+    val mediaFiles = galleryUiState.files.filter { it.type == FileType.IMAGE || it.type == FileType.VIDEO }
     
     // 滚动状态 - 用于控制顶部栏透明度
     var scrollProgress by remember { mutableFloatStateOf(0f) }
@@ -70,135 +96,38 @@ fun HomeScreen(
         label = "titleAlpha"
     )
     val topBarAlpha by animateFloatAsState(
-        targetValue = if (scrollProgress > 0.5f) 0f else 1f - (scrollProgress / 0.5f) * 0.7f,
+        targetValue = if (scrollProgress > 0.5f) 0.3f else 1f,
         animationSpec = tween(durationMillis = 150),
         label = "topBarAlpha"
     )
 
-    Scaffold(
-        topBar = {
-            if (!isTv) {
-                Surface(
-                    modifier = Modifier.fillMaxWidth(),
-                    color = MaterialTheme.colorScheme.surface.copy(alpha = topBarAlpha)
-                ) {
-                    TopAppBar(
-                        title = { 
-                            Text(
-                                "HomeDrive", 
-                                style = MaterialTheme.typography.titleMedium,
-                                modifier = Modifier.alpha(titleAlpha)
-                            ) 
-                        },
-                        actions = {
-                            IconButton(onClick = { navController.navigate(Screen.Settings.route) }) {
-                                Icon(
-                                    Icons.Default.Settings,
-                                    contentDescription = "设置",
-                                    modifier = Modifier.size(24.dp)
-                                )
-                            }
-                        },
-                        colors = TopAppBarDefaults.topAppBarColors(
-                            containerColor = Color.Transparent
-                        )
-                    )
-                }
-            }
-        },
-        bottomBar = {
-            if (!isTv) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 8.dp)
-                ) {
-                    Surface(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(64.dp),
-                        shape = MaterialTheme.shapes.large,
-                        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f),
-                        tonalElevation = 8.dp,
-                        shadowElevation = 8.dp
-                    ) {
-                        Row(
-                            modifier = Modifier.fillMaxSize(),
-                            horizontalArrangement = Arrangement.SpaceEvenly,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            val navBackStackEntry by navController.currentBackStackEntryAsState()
-                            val currentDestination = navBackStackEntry?.destination
+    // 状态栏透明度
+    val statusBarAlpha by animateFloatAsState(
+        targetValue = if (scrollProgress > 0.3f) 0f else 1f,
+        animationSpec = tween(durationMillis = 150),
+        label = "statusBarAlpha"
+    )
 
-                            bottomNavItems.forEach { screen ->
-                                val isSelected = currentDestination?.hierarchy?.any { it.route == screen.route } == true
-                                NavigationBarItem(
-                                    icon = { 
-                                        Icon(
-                                            screen.icon, 
-                                            contentDescription = null,
-                                            tint = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                    },
-                                    label = { 
-                                        Text(
-                                            getStringResource(screen.title),
-                                            color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                    },
-                                    selected = isSelected,
-                                    onClick = {
-                                        navController.navigate(screen.route) {
-                                            popUpTo(navController.graph.findStartDestination().id) {
-                                                saveState = true
-                                            }
-                                            launchSingleTop = true
-                                            restoreState = true
-                                        }
-                                    },
-                                    colors = NavigationBarItemDefaults.colors(
-                                        selectedIconColor = MaterialTheme.colorScheme.primary,
-                                        selectedTextColor = MaterialTheme.colorScheme.primary,
-                                        unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        indicatorColor = Color.Transparent
-                                    )
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        floatingActionButton = {
-            if (!isTv) {
-                FloatingActionButton(
-                    onClick = { showUploadDialog = true },
-                    containerColor = MaterialTheme.colorScheme.primary
-                ) {
-                    Icon(Icons.Default.Upload, contentDescription = "上传")
-                }
-            }
-        }
-    ) { paddingValues ->
-        Row(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues),
-            verticalAlignment = Alignment.Top
-        ) {
-            if (isTv) {
-                NavigationRail {
-                    Spacer(modifier = Modifier.weight(1f))
+    Box(modifier = Modifier.fillMaxSize()) {
+        Scaffold(
+            containerColor = Color.Transparent,
+            floatingActionButtonPosition = FabPosition.Center,
+            floatingActionButton = {
+                if (!isTv) {
+                    // 悬浮式底部导航栏 - 只在图库和图集页面显示
                     val navBackStackEntry by navController.currentBackStackEntryAsState()
                     val currentDestination = navBackStackEntry?.destination
-
-                    bottomNavItems.forEach { screen ->
-                        NavigationRailItem(
-                            icon = { Icon(screen.icon, contentDescription = null) },
-                            label = { Text(getStringResource(screen.title)) },
-                            selected = currentDestination?.hierarchy?.any { it.route == screen.route } == true,
-                            onClick = {
+                    
+                    // 只在图库和图集页面显示导航栏
+                    val showNavBar = currentDestination?.hierarchy?.any { 
+                        it.route == Screen.Gallery.route || it.route == Screen.Albums.route 
+                    } == true
+                    
+                    if (showNavBar) {
+                        FloatingBottomNavBar(
+                            items = listOf(Screen.Gallery, Screen.Albums),
+                            currentDestination = currentDestination,
+                            onNavigate = { screen ->
                                 navController.navigate(screen.route) {
                                     popUpTo(navController.graph.findStartDestination().id) {
                                         saveState = true
@@ -209,55 +138,151 @@ fun HomeScreen(
                             }
                         )
                     }
-                    Spacer(modifier = Modifier.weight(1f))
                 }
             }
-
-            NavHost(
-                navController = navController,
-                startDestination = Screen.Gallery.route,
-                modifier = Modifier.fillMaxSize()
+        ) { paddingValues ->
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(paddingValues)
             ) {
-                composable(Screen.Gallery.route) {
-                    GalleryScreen(
-                        onNavigateToFolder = { folder ->
-                            // Handle folder navigation
-                        },
-                        onFileClick = { file ->
-                            // 找到点击文件在媒体列表中的索引
-                            val index = mediaFiles.indexOfFirst { it.id == file.id }
-                            if (index >= 0) {
-                                selectedFileIndex = index
-                                showMediaViewer = true
+                if (isTv) {
+                    Row(modifier = Modifier.fillMaxSize()) {
+                        NavigationRail {
+                            Spacer(modifier = Modifier.weight(1f))
+                            val navBackStackEntry by navController.currentBackStackEntryAsState()
+                            val currentDestination = navBackStackEntry?.destination
+
+                            bottomNavItems.forEach { screen ->
+                                NavigationRailItem(
+                                    icon = { Icon(screen.icon, contentDescription = null) },
+                                    label = { Text(getStringResource(screen.title)) },
+                                    selected = currentDestination?.hierarchy?.any { it.route == screen.route } == true,
+                                    onClick = {
+                                        navController.navigate(screen.route) {
+                                            popUpTo(navController.graph.findStartDestination().id) {
+                                                saveState = true
+                                            }
+                                            launchSingleTop = true
+                                            restoreState = true
+                                        }
+                                    }
+                                )
                             }
-                        },
-                        onNavigateToUpload = { /* Navigate to upload */ },
-                        viewModel = galleryViewModel,
-                        onScrollProgressChange = { progress -> scrollProgress = progress }
-                    )
+                            Spacer(modifier = Modifier.weight(1f))
+                        }
+                    }
                 }
 
-                composable(Screen.Albums.route) {
-                    AlbumScreen(
-                        onNavigateBack = { navController.popBackStack() },
-                        onAlbumClick = { /* Navigate to album detail */ },
-                        viewModel = albumViewModel
-                    )
-                }
+                NavHost(
+                    navController = navController,
+                    startDestination = Screen.Gallery.route,
+                    modifier = Modifier.fillMaxSize()
+                ) {
+                    composable(Screen.Gallery.route) {
+                        GalleryScreen(
+                            onNavigateToFolder = { /* Handle folder navigation */ },
+                            onFileClick = { file ->
+                                val index = mediaFiles.indexOfFirst { it.id == file.id }
+                                if (index >= 0) {
+                                    selectedFileIndex = index
+                                    showMediaViewer = true
+                                }
+                            },
+                            onNavigateToUpload = { /* Navigate to upload */ },
+                            viewModel = galleryViewModel,
+                            onScrollProgressChange = { progress -> scrollProgress = progress }
+                        )
+                    }
 
-                composable(Screen.Shares.route) {
-                    ShareScreen(
-                        onNavigateBack = { navController.popBackStack() },
-                        viewModel = shareViewModel
-                    )
-                }
+                    composable(Screen.Albums.route) {
+                        AlbumScreen(
+                            onNavigateBack = { navController.popBackStack() },
+                            onAlbumClick = { /* Navigate to album detail */ },
+                            viewModel = albumViewModel
+                        )
+                    }
 
-                composable(Screen.Settings.route) {
-                    SettingsScreen(
-                        onNavigateBack = { navController.popBackStack() },
-                        onLogout = onLogout,
-                        viewModel = settingsViewModel
+                    composable(Screen.Shares.route) {
+                        ShareScreen(
+                            onNavigateBack = { navController.popBackStack() },
+                            viewModel = shareViewModel
+                        )
+                    }
+
+                    composable(Screen.Settings.route) {
+                        SettingsScreen(
+                            onNavigateBack = { navController.popBackStack() },
+                            onLogout = onLogout,
+                            viewModel = settingsViewModel
+                        )
+                    }
+
+                    composable(Screen.Upload.route) {
+                        UploadScreen(
+                            onNavigateBack = { navController.popBackStack() },
+                            viewModel = uploadViewModel
+                        )
+                    }
+                }
+            }
+        }
+        
+        // 自定义顶部栏（包含状态栏和导航栏）
+        Column(
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            // 状态栏背景（随滚动变化透明度）- 与导航栏同色
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .alpha(topBarAlpha)
+                    .background(MaterialTheme.colorScheme.surface)
+                    .windowInsetsTopHeight(WindowInsets.statusBars)
+            )
+            
+            // 顶部导航栏 - 紧凑高度
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(48.dp),
+                color = MaterialTheme.colorScheme.surface.copy(alpha = topBarAlpha),
+                tonalElevation = 0.dp,
+                shadowElevation = 0.dp
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = 16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        "HomeDrive",
+                        style = MaterialTheme.typography.titleMedium,
+                        modifier = Modifier
+                            .weight(1f)
+                            .alpha(titleAlpha)
                     )
+                    IconButton(
+                        onClick = { navController.navigate(Screen.Upload.route) },
+                        modifier = Modifier.size(40.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.Add,
+                            contentDescription = "上传",
+                            modifier = Modifier.size(22.dp)
+                        )
+                    }
+                    IconButton(
+                        onClick = { navController.navigate(Screen.Settings.route) },
+                        modifier = Modifier.size(40.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.Settings,
+                            contentDescription = "设置",
+                            modifier = Modifier.size(22.dp)
+                        )
+                    }
                 }
             }
         }
@@ -332,5 +357,75 @@ private fun getStringResource(id: Int): String {
         R.string.settings -> "设置"
         R.string.upload -> "上传"
         else -> ""
+    }
+}
+
+/**
+ * 悬浮式底部导航栏 - 紧凑文字样式
+ */
+@Composable
+private fun FloatingBottomNavBar(
+    items: List<Screen>,
+    currentDestination: androidx.navigation.NavDestination?,
+    onNavigate: (Screen) -> Unit
+) {
+    Surface(
+        modifier = Modifier
+            .padding(bottom = 16.dp)
+            .height(44.dp)
+            .fillMaxWidth(0.45f),
+        shape = RoundedCornerShape(22.dp),
+        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f),
+        tonalElevation = 8.dp,
+        shadowElevation = 8.dp
+    ) {
+        Row(
+            modifier = Modifier
+                .padding(horizontal = 6.dp, vertical = 4.dp)
+                .fillMaxHeight(),
+            horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterHorizontally),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            items.forEach { screen ->
+                val isSelected = currentDestination?.hierarchy?.any { it.route == screen.route } == true
+                
+                val backgroundColor by animateColorAsState(
+                    targetValue = if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
+                                  else Color.Transparent,
+                    animationSpec = tween(durationMillis = 200),
+                    label = "bgColor"
+                )
+                
+                val contentColor by animateColorAsState(
+                    targetValue = if (isSelected) MaterialTheme.colorScheme.primary
+                                  else MaterialTheme.colorScheme.onSurfaceVariant,
+                    animationSpec = tween(durationMillis = 200),
+                    label = "contentColor"
+                )
+                
+                Surface(
+                    modifier = Modifier
+                        .height(36.dp)
+                        .weight(1f),
+                    shape = RoundedCornerShape(18.dp),
+                    color = backgroundColor,
+                    onClick = { onNavigate(screen) }
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(horizontal = 12.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = getStringResource(screen.title),
+                            style = MaterialTheme.typography.labelLarge,
+                            color = contentColor,
+                            maxLines = 1
+                        )
+                    }
+                }
+            }
+        }
     }
 }
