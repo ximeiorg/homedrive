@@ -1,13 +1,14 @@
 use crate::auth::Authorized;
 use crate::error::AppError;
 use crate::state::AppState;
-use axum::{Json, extract::Path, extract::Query, extract::State, extract::Request, response::IntoResponse};
+use axum::{Json, extract::Path, extract::Query, extract::State, response::IntoResponse};
 use chrono::Utc;
 use sea_orm::QueryOrder;
 use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::fs::File;
 use tokio_util::io::ReaderStream;
+use futures::TryStreamExt;
 
 use schema::file::{
     HashCheckQuery, HashCheckResponse, ListFilesQuery, SyncFilesRequest, SyncFilesResponse,
@@ -29,7 +30,12 @@ pub async fn check_file_hash_exists(
     Json(HashCheckResponse { exists })
 }
 
-/// Upload file handler - requires authentication
+/// Upload file handler with streaming support for large files - requires authentication
+/// 
+/// Multipart form fields:
+/// - file: (required) file content
+/// 
+/// Hash is automatically calculated during upload using xxh3 algorithm.
 pub async fn upload_file(
     State(state): State<Arc<AppState>>,
     auth: Authorized,
@@ -37,61 +43,55 @@ pub async fn upload_file(
 ) -> Json<UploadFileResponse> {
     let db = &state.conn;
     let uploader_id = auth.0;
+    let storage_root = state.config.storage.volume.clone();
 
-    // Get the file from multipart
-    if let Some(field) = multipart.next_field().await.unwrap_or(None) {
-        let filename = field.file_name().unwrap_or("unknown").to_string();
-        let content_type = field
-            .content_type()
-            .unwrap_or("application/octet-stream")
-            .to_string();
-        let data = field.bytes().await.unwrap_or_default();
+    // 遍历 multipart 字段，找到文件
+    while let Some(field) = multipart.next_field().await.unwrap_or(None) {
+        let field_name = field.name().unwrap_or("").to_string();
+        
+        if field_name == "file" {
+            // 找到文件字段，处理文件上传
+            let filename = field.file_name().unwrap_or("unknown").to_string();
+            let content_type = field
+                .content_type()
+                .unwrap_or("application/octet-stream")
+                .to_string();
 
-        // Get the hash from form field
-        let hash_field = multipart.next_field().await.unwrap_or(None);
-        let hash = if let Some(f) = hash_field {
-            f.text().await.unwrap_or_default()
-        } else {
-            String::new()
-        };
+            // 将 field 转换为流
+            let stream = field.map_err(|err| std::io::Error::new(std::io::ErrorKind::Other, err));
 
-        // Check if hash already exists
-        if let Some(existing_id) = services::FileService::find_by_hash(db, &hash)
-            .await
-            .unwrap_or(None)
-        {
-            return Json(UploadFileResponse {
-                success: true,
-                file_id: existing_id,
-                message: "File already exists".to_string(),
-            });
+            // 调用 service 层处理上传
+            match services::FileService::upload_file_stream(
+                db,
+                &storage_root,
+                stream,
+                content_type,
+                filename,
+                uploader_id,
+            ).await {
+                Ok((file_id, message)) => {
+                    return Json(UploadFileResponse {
+                        success: true,
+                        file_id,
+                        message,
+                    });
+                }
+                Err(e) => {
+                    return Json(UploadFileResponse {
+                        success: false,
+                        file_id: 0,
+                        message: e.to_string(),
+                    });
+                }
+            }
         }
-
-        // Upload file (save to storage + create database record)
-        let file_id = services::FileService::upload_file(
-            db,
-            &state.storage,
-            data.to_vec(),
-            hash,
-            content_type,
-            filename,
-            uploader_id,
-        )
-        .await
-        .unwrap_or(0);
-
-        Json(UploadFileResponse {
-            success: true,
-            file_id,
-            message: "File uploaded successfully".to_string(),
-        })
-    } else {
-        Json(UploadFileResponse {
-            success: false,
-            file_id: 0,
-            message: "No file provided".to_string(),
-        })
     }
+
+    Json(UploadFileResponse {
+        success: false,
+        file_id: 0,
+        message: "No file provided".to_string(),
+    })
 }
 
 /// Parse Range header into (start, end) byte positions

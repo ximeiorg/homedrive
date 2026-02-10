@@ -2709,9 +2709,11 @@ dependencies = [
  "axum",
  "axum-extra",
  "base64",
+ "bytes",
  "chrono",
  "config",
  "dotenvy",
+ "futures",
  "hyper",
  "hyper-util",
  "jsonwebtoken",
@@ -2731,6 +2733,7 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "urlencoding",
+ "xxhash-rust",
 ]
 
 [[package]]
@@ -2739,6 +2742,7 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "bcrypt",
+ "bytes",
  "chrono",
  "futures",
  "jsonwebtoken",

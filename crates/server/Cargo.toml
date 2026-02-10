@@ -34,3 +34,6 @@ sea-orm = { version = "2.0.0-rc", features = ["runtime-tokio-rustls", "sqlx-sqli
 once_cell = "1.21"
 chrono = { version = "0.4", features = ["std"] }
 urlencoding = "1.1"
+futures = "0.3"
+bytes = "1"
+xxhash-rust = { version = "0.8.15", features = ["xxh3"] }
