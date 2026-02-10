@@ -36,6 +36,7 @@ class MainActivity : ComponentActivity() {
         val loginViewModel = LoginViewModel(
             authRepository = com.kingzcheung.homedrive.data.repository.AuthRepository(api, preferencesManager)
         )
+        val mediaViewerViewModel = MediaViewerViewModel()
 
         setContent {
             HomedriveTheme {
@@ -62,7 +63,8 @@ class MainActivity : ComponentActivity() {
                                 uploadViewModel = uploadViewModel,
                                 albumViewModel = albumViewModel,
                                 shareViewModel = shareViewModel,
-                                settingsViewModel = settingsViewModel
+                                settingsViewModel = settingsViewModel,
+                                mediaViewerViewModel = mediaViewerViewModel
                             )
                         }
                         false -> {

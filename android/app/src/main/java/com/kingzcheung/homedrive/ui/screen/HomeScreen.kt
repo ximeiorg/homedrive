@@ -1,5 +1,7 @@
 package com.kingzcheung.homedrive.ui.screen
 
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -7,6 +9,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.stringResource
@@ -18,6 +21,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.kingzcheung.homedrive.R
+import com.kingzcheung.homedrive.data.model.FileItem
 import com.kingzcheung.homedrive.ui.viewmodel.*
 
 sealed class Screen(val route: String, val title: Int, val icon: androidx.compose.ui.graphics.vector.ImageVector) {
@@ -35,7 +39,8 @@ fun HomeScreen(
     uploadViewModel: UploadViewModel,
     albumViewModel: AlbumViewModel,
     shareViewModel: ShareViewModel,
-    settingsViewModel: SettingsViewModel
+    settingsViewModel: SettingsViewModel,
+    mediaViewerViewModel: MediaViewerViewModel
 ) {
     val navController = rememberNavController()
     val configuration = LocalConfiguration.current
@@ -48,30 +53,57 @@ fun HomeScreen(
     )
 
     var showUploadDialog by remember { mutableStateOf(false) }
+    
+    // 媒体查看器状态
+    var showMediaViewer by remember { mutableStateOf(false) }
+    var selectedFileIndex by remember { mutableStateOf(0) }
+    
+    // 获取当前文件列表
+    val galleryUiState by galleryViewModel.uiState.collectAsState()
+    val mediaFiles = galleryUiState.files.filter { it.type == com.kingzcheung.homedrive.data.model.FileType.IMAGE || it.type == com.kingzcheung.homedrive.data.model.FileType.VIDEO }
+    
+    // 滚动状态 - 用于控制顶部栏透明度
+    var scrollProgress by remember { mutableFloatStateOf(0f) }
+    val titleAlpha by animateFloatAsState(
+        targetValue = if (scrollProgress > 0.3f) 0f else 1f - (scrollProgress / 0.3f),
+        animationSpec = tween(durationMillis = 150),
+        label = "titleAlpha"
+    )
+    val topBarAlpha by animateFloatAsState(
+        targetValue = if (scrollProgress > 0.5f) 0f else 1f - (scrollProgress / 0.5f) * 0.7f,
+        animationSpec = tween(durationMillis = 150),
+        label = "topBarAlpha"
+    )
 
     Scaffold(
         topBar = {
             if (!isTv) {
-                TopAppBar(
-                    title = { 
-                        Text(
-                            "HomeDrive", 
-                            style = MaterialTheme.typography.titleMedium
-                        ) 
-                    },
-                    actions = {
-                        IconButton(onClick = { navController.navigate(Screen.Settings.route) }) {
-                            Icon(
-                                Icons.Default.Settings,
-                                contentDescription = "设置",
-                                modifier = Modifier.size(24.dp)
-                            )
-                        }
-                    },
-                    colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = MaterialTheme.colorScheme.surface
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    color = MaterialTheme.colorScheme.surface.copy(alpha = topBarAlpha)
+                ) {
+                    TopAppBar(
+                        title = { 
+                            Text(
+                                "HomeDrive", 
+                                style = MaterialTheme.typography.titleMedium,
+                                modifier = Modifier.alpha(titleAlpha)
+                            ) 
+                        },
+                        actions = {
+                            IconButton(onClick = { navController.navigate(Screen.Settings.route) }) {
+                                Icon(
+                                    Icons.Default.Settings,
+                                    contentDescription = "设置",
+                                    modifier = Modifier.size(24.dp)
+                                )
+                            }
+                        },
+                        colors = TopAppBarDefaults.topAppBarColors(
+                            containerColor = Color.Transparent
+                        )
                     )
-                )
+                }
             }
         },
         bottomBar = {
@@ -191,9 +223,17 @@ fun HomeScreen(
                         onNavigateToFolder = { folder ->
                             // Handle folder navigation
                         },
-                        onFileClick = { /* Navigate to viewer */ },
+                        onFileClick = { file ->
+                            // 找到点击文件在媒体列表中的索引
+                            val index = mediaFiles.indexOfFirst { it.id == file.id }
+                            if (index >= 0) {
+                                selectedFileIndex = index
+                                showMediaViewer = true
+                            }
+                        },
                         onNavigateToUpload = { /* Navigate to upload */ },
-                        viewModel = galleryViewModel
+                        viewModel = galleryViewModel,
+                        onScrollProgressChange = { progress -> scrollProgress = progress }
                     )
                 }
 
@@ -228,6 +268,16 @@ fun HomeScreen(
         UploadBottomSheet(
             onDismiss = { showUploadDialog = false },
             viewModel = uploadViewModel
+        )
+    }
+    
+    // 全屏媒体查看器
+    if (showMediaViewer && mediaFiles.isNotEmpty()) {
+        MediaViewerScreen(
+            files = mediaFiles,
+            initialIndex = selectedFileIndex,
+            onNavigateBack = { showMediaViewer = false },
+            viewModel = mediaViewerViewModel
         )
     }
 }

@@ -1,6 +1,7 @@
 package com.kingzcheung.homedrive.di
 
 import android.content.Context
+import android.util.Log
 import com.kingzcheung.homedrive.data.api.HomedriveApi
 import com.kingzcheung.homedrive.data.local.PreferencesManager
 import kotlinx.coroutines.flow.first
@@ -15,6 +16,8 @@ import java.util.concurrent.TimeUnit
  * Simple dependency injection container without Hilt
  */
 object AppContainer {
+    private const val TAG = "AppContainer"
+    
     private lateinit var applicationContext: Context
     private var preferencesManager: PreferencesManager? = null
     private var api: HomedriveApi? = null
@@ -67,14 +70,37 @@ object AppContainer {
         return api!!
     }
 
-    suspend fun getStaticUrl(path: String): String {
+    /**
+     * 获取带认证 token 的静态资源 URL
+     * @param urlOrPath 服务器返回的 URL（可能是完整 URL 或相对路径）
+     * @return 带有 token 参数的完整 URL
+     */
+    suspend fun getStaticUrl(urlOrPath: String): String {
         val prefs = getPreferencesManager()
-        val baseUrl = prefs.serverUrl.first().ifEmpty { "http://192.168.77.58:2300" }
         val token = prefs.token.first() ?: ""
-        return if (path.startsWith("/")) {
-            "$baseUrl/api/static${path}?token=$token"
+        
+        Log.d(TAG, "getStaticUrl input: $urlOrPath")
+        
+        // 如果已经是完整的 URL，直接添加 token
+        val result = if (urlOrPath.startsWith("http://") || urlOrPath.startsWith("https://")) {
+            // 已经是完整 URL，检查是否已有查询参数
+            if (urlOrPath.contains("?")) {
+                "$urlOrPath&token=$token"
+            } else {
+                "$urlOrPath?token=$token"
+            }
         } else {
-            "$baseUrl/api/static/$path?token=$token"
+            // 相对路径，需要拼接 baseUrl
+            val baseUrl = prefs.serverUrl.first().ifEmpty { "http://192.168.77.58:2300" }
+            val path = if (urlOrPath.startsWith("/")) {
+                urlOrPath
+            } else {
+                "/$urlOrPath"
+            }
+            "$baseUrl/api/static$path?token=$token"
         }
+        
+        Log.d(TAG, "getStaticUrl result: $result")
+        return result
     }
 }
