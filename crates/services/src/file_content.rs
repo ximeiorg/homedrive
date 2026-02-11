@@ -20,6 +20,23 @@ pub struct FileCheckResponse {
     pub exists: bool,
 }
 
+/// 列出用户文件的参数
+#[derive(Debug, Default, Clone)]
+pub struct ListMemberFilesParams {
+    /// 页码，从 1 开始
+    pub page: Option<u64>,
+    /// 每页大小，默认 100
+    pub page_size: Option<u64>,
+    /// 排序字段 (file_name, file_size, created_at)
+    pub sort_by: Option<String>,
+    /// 排序方向 (asc, desc)
+    pub sort_order: Option<String>,
+    /// 文件类型过滤 (image, video, audio, document, archive)
+    pub file_type: Option<String>,
+    /// 文件名搜索（模糊匹配）
+    pub search: Option<String>,
+}
+
 /// 文件服务
 pub struct FileService;
 
@@ -28,7 +45,7 @@ impl FileService {
     pub fn calculate_hash(data: &[u8]) -> String {
         use xxhash_rust::xxh3::xxh3_128;
         let hash_bytes = xxh3_128(data);
-        format!("{:032x}", hash_bytes)
+        format!("{hash_bytes:032x}")
     }
 
     /// 检查文件哈希是否存在
@@ -71,9 +88,14 @@ impl FileService {
         use std::path::PathBuf;
 
         // 生成临时存储路径（先写入临时位置，放在 storage_tag 目录下）
-        let temp_key = format!("{}/temp/{}_{}", storage_tag, Utc::now().timestamp_millis(), filename);
+        let temp_key = format!(
+            "{}/temp/{}_{}",
+            storage_tag,
+            Utc::now().timestamp_millis(),
+            filename
+        );
         let temp_path = PathBuf::from(storage_root).join(&temp_key);
-        
+
         // 创建临时目录
         if let Some(parent) = temp_path.parent() {
             tokio::fs::create_dir_all(parent)
@@ -85,7 +107,7 @@ impl FileService {
         let file = tokio::fs::File::create(&temp_path)
             .await
             .map_err(|e| ServiceError::Storage(e.to_string()))?;
-        
+
         let mut writer = BufWriter::new(file);
         let mut hasher = xxhash_rust::xxh3::Xxh3::new();
         let mut file_size: u64 = 0;
@@ -114,23 +136,26 @@ impl FileService {
         if let Some(existing_id) = Self::find_by_hash(db, &content_hash).await? {
             // 删除临时文件
             let _ = tokio::fs::remove_file(&temp_path).await;
-            
+
             // 检查 member_files 是否已存在此关联
-            let association_exists = store::member_file::query::Query::association_exists(
-                db,
-                uploader_id,
-                existing_id,
-            ).await.map_err(|e| ServiceError::Database(e))?;
-            
+            let association_exists =
+                store::member_file::query::Query::association_exists(db, uploader_id, existing_id)
+                    .await
+                    .map_err(ServiceError::Database)?;
+
             if association_exists {
                 // 用户已经有这个文件了
-                return Ok((existing_id, "File already exists in your collection".to_string()));
+                return Ok((
+                    existing_id,
+                    "File already exists in your collection".to_string(),
+                ));
             }
-            
+
             // 增加 file_contents 的引用计数
             store::file_content::mutation::Mutation::increment_ref_count(db, existing_id)
-                .await.map_err(|e| ServiceError::Database(e))?;
-            
+                .await
+                .map_err(ServiceError::Database)?;
+
             // 创建 member_files 关联记录
             let member_file_data = store::member_file::mutation::CreateMemberFile {
                 member_id: uploader_id,
@@ -138,11 +163,15 @@ impl FileService {
                 file_name: filename.clone(),
                 description: String::new(),
             };
-            
+
             store::member_file::mutation::Mutation::create(db, member_file_data)
-                .await.map_err(|e| ServiceError::Database(e))?;
-            
-            return Ok((existing_id, "File linked to your collection (duplicate content)".to_string()));
+                .await
+                .map_err(ServiceError::Database)?;
+
+            return Ok((
+                existing_id,
+                "File linked to your collection (duplicate content)".to_string(),
+            ));
         }
 
         // 生成最终存储路径（包含 storage_tag）
@@ -155,20 +184,20 @@ impl FileService {
             filename
         );
         let final_path = PathBuf::from(storage_root).join(&storage_key);
-        
+
         // 创建最终目录
         if let Some(parent) = final_path.parent() {
             tokio::fs::create_dir_all(parent)
                 .await
                 .map_err(|e| ServiceError::Storage(e.to_string()))?;
         }
-        
+
         // 移动临时文件到最终位置
         if let Err(e) = tokio::fs::rename(&temp_path, &final_path).await {
             // 如果跨设备移动失败，尝试复制+删除
             tokio::fs::copy(&temp_path, &final_path)
                 .await
-                .map_err(|copy_err| ServiceError::Storage(format!("{} (copy: {})", e, copy_err)))?;
+                .map_err(|copy_err| ServiceError::Storage(format!("{e} (copy: {copy_err})")))?;
             let _ = tokio::fs::remove_file(&temp_path).await;
         }
 
@@ -186,7 +215,7 @@ impl FileService {
 
         let file_content = store::file_content::mutation::Mutation::create(db, create_data).await?;
         let file_content_id = file_content.id;
-        
+
         // 创建 member_files 关联记录
         let member_file_data = store::member_file::mutation::CreateMemberFile {
             member_id: uploader_id,
@@ -194,9 +223,9 @@ impl FileService {
             file_name: filename.clone(),
             description: String::new(),
         };
-        
+
         store::member_file::mutation::Mutation::create(db, member_file_data).await?;
-        
+
         Ok((file_content_id, "File uploaded successfully".to_string()))
     }
 
@@ -297,12 +326,7 @@ impl FileService {
     pub async fn list_member_files(
         db: &DatabaseConnection,
         member_id: i64,
-        page: Option<u64>,
-        page_size: Option<u64>,
-        sort_by: Option<String>,
-        sort_order: Option<String>,
-        file_type: Option<String>,
-        search: Option<String>,
+        params: ListMemberFilesParams,
     ) -> Result<(
         Vec<(
             store::entity::member_files::Model,
@@ -311,19 +335,19 @@ impl FileService {
         u64,
     )> {
         // 转换排序参数
-        let sort_by = sort_by.as_ref().map(|s| match s.as_str() {
+        let sort_by = params.sort_by.as_ref().map(|s| match s.as_str() {
             "file_name" => SortField::FileName,
             "file_size" => SortField::FileSize,
             _ => SortField::CreatedAt,
         });
 
-        let sort_order = sort_order.as_ref().map(|s| match s.as_str() {
+        let sort_order = params.sort_order.as_ref().map(|s| match s.as_str() {
             "asc" => SortOrder::Asc,
             _ => SortOrder::Desc,
         });
 
         // 转换文件类型参数
-        let file_type = file_type.as_ref().map(|s| match s.as_str() {
+        let file_type = params.file_type.as_ref().map(|s| match s.as_str() {
             "image" => FileTypeFilter::Image,
             "video" => FileTypeFilter::Video,
             "audio" => FileTypeFilter::Audio,
@@ -333,12 +357,12 @@ impl FileService {
         });
 
         let list_query = ListMemberFilesQuery {
-            page,
-            page_size,
+            page: params.page,
+            page_size: params.page_size,
             sort_by,
             sort_order,
             file_type,
-            search,
+            search: params.search,
         };
 
         store::member_file::query::Query::list_files_by_member(db, member_id, list_query)

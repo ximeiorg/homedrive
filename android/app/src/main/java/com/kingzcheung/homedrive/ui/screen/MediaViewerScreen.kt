@@ -18,6 +18,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
@@ -195,48 +197,101 @@ private fun ZoomableImageViewer(
     var offsetX by remember { mutableFloatStateOf(0f) }
     var offsetY by remember { mutableFloatStateOf(0f) }
     
-    // 追踪垂直滑动以检测向上滑动手势
-    var totalVerticalDrag by remember { mutableFloatStateOf(0f) }
-    
     Box(
         modifier = modifier
             .fillMaxSize()
             .pointerInput(Unit) {
-                // 只在缩放时处理变换手势，否则让 Pager 处理水平滑动
-                detectTransformGestures { _, pan, zoom, _ ->
-                    val newScale = (scale * zoom).coerceIn(1f, 5f)
-                    
-                    if (newScale > 1f) {
-                        // 缩放状态下，允许平移
-                        scale = newScale
-                        val maxX = (size.width * (scale - 1) / 2)
-                        val maxY = (size.height * (scale - 1) / 2)
-                        offsetX = (offsetX + pan.x).coerceIn(-maxX, maxX)
-                        offsetY = (offsetY + pan.y).coerceIn(-maxY, maxY)
-                    } else {
-                        // 未缩放时，重置偏移
-                        scale = 1f
-                        offsetX = 0f
-                        offsetY = 0f
+                // 自定义手势处理：只在缩放时消费手势
+                awaitPointerEventScope {
+                    while (true) {
+                        val event = awaitPointerEvent()
+                        
+                        when (event.type) {
+                            PointerEventType.Press -> {
+                                // 按下时不做处理
+                            }
+                            PointerEventType.Release -> {
+                                // 点击检测在单独的 detectTapGestures 中处理
+                            }
+                            PointerEventType.Move -> {
+                                // 只在缩放状态下处理手势
+                                if (scale > 1f) {
+                                    val changes = event.changes
+                                    if (changes.size == 1) {
+                                        // 单指拖动 - 平移
+                                        val change = changes[0]
+                                        val panX = change.positionChange().x
+                                        val panY = change.positionChange().y
+                                        
+                                        val maxX = (size.width * (scale - 1) / 2)
+                                        val maxY = (size.height * (scale - 1) / 2)
+                                        offsetX = (offsetX + panX).coerceIn(-maxX, maxX)
+                                        offsetY = (offsetY + panY).coerceIn(-maxY, maxY)
+                                        
+                                        change.consume()
+                                    } else if (changes.size == 2) {
+                                        // 双指缩放
+                                        val change0 = changes[0]
+                                        val change1 = changes[1]
+                                        
+                                        val currentDistance = Offset(
+                                            change0.position.x - change1.position.x,
+                                            change0.position.y - change1.position.y
+                                        ).getDistance()
+                                        
+                                        val previousDistance = Offset(
+                                            change0.previousPosition.x - change1.previousPosition.x,
+                                            change0.previousPosition.y - change1.previousPosition.y
+                                        ).getDistance()
+                                        
+                                        if (previousDistance > 0) {
+                                            val zoom = currentDistance / previousDistance
+                                            val newScale = (scale * zoom).coerceIn(1f, 5f)
+                                            
+                                            if (newScale > 1f) {
+                                                scale = newScale
+                                                val maxX = (size.width * (scale - 1) / 2)
+                                                val maxY = (size.height * (scale - 1) / 2)
+                                                offsetX = offsetX.coerceIn(-maxX, maxX)
+                                                offsetY = offsetY.coerceIn(-maxY, maxY)
+                                            } else {
+                                                scale = 1f
+                                                offsetX = 0f
+                                                offsetY = 0f
+                                            }
+                                        }
+                                        
+                                        change0.consume()
+                                        change1.consume()
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }
             .pointerInput(Unit) {
-                // 检测垂直滑动（向上滑动显示信息）
-                detectVerticalDragGestures(
-                    onDragStart = { totalVerticalDrag = 0f },
-                    onDragEnd = {
-                        if (totalVerticalDrag < -200 && scale == 1f) {
+                // 双击缩放和点击处理
+                detectTapGestures(
+                    onDoubleTap = { 
+                        // 双击切换缩放
+                        if (scale > 1f) {
+                            scale = 1f
+                            offsetX = 0f
+                            offsetY = 0f
+                        } else {
+                            scale = 2f
+                        }
+                    },
+                    onTap = { onTap() },
+                    onLongPress = {
+                        // 长按显示信息
+                        if (scale == 1f) {
                             onSwipeUp()
                         }
-                        totalVerticalDrag = 0f
-                    },
-                    onVerticalDrag = { _, dragAmount ->
-                        totalVerticalDrag += dragAmount
                     }
                 )
-            }
-            .clickable(onClick = onTap),
+            },
         contentAlignment = Alignment.Center
     ) {
         SubcomposeAsyncImage(

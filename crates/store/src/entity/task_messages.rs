@@ -52,7 +52,7 @@ impl TryFrom<String> for TaskStatus {
             "processing" => Ok(TaskStatus::Processing),
             "completed" => Ok(TaskStatus::Completed),
             "failed" => Ok(TaskStatus::Failed),
-            _ => Err(format!("Unknown task status: {}", value)),
+            _ => Err(format!("Unknown task status: {value}")),
         }
     }
 }

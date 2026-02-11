@@ -18,28 +18,6 @@ pub(crate) mod sync_file;
 
 pub use sync_file::SyncFilesHandler;
 
-// SyncDatabaseHandler 待实现
-#[derive(Clone)]
-pub struct SyncDatabaseHandler;
-
-impl SyncDatabaseHandler {
-    pub fn new() -> Self {
-        Self
-    }
-}
-
-#[async_trait::async_trait]
-impl TaskHandler for SyncDatabaseHandler {
-    fn task_type(&self) -> &'static str {
-        "sync_database"
-    }
-
-    async fn handle(&self, _payload: &TaskPayload) -> Result<()> {
-        // TODO: 实现从数据库同步到目录的逻辑
-        Ok(())
-    }
-}
-
 /// 任务类型枚举
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum TaskType {

@@ -83,13 +83,13 @@ where
         } else {
             // 从 query 参数获取 token: ?token=xxx
             let query = parts.uri.query().unwrap_or("");
-            let token = query
+
+            query
                 .split('&')
                 .find(|p| p.starts_with("token="))
                 .and_then(|p| p.strip_prefix("token="))
                 .map(|p| urlencoding::decode(p).unwrap_or_else(|_| p.to_string()))
-                .ok_or(AppError::InvalidCredentials)?;
-            token
+                .ok_or(AppError::InvalidCredentials)?
         };
 
         let decoding_key = &JWT_SECRET_KEY.1;

@@ -39,7 +39,7 @@ impl SyncFilesHandler {
     fn calculate_hash(content: &[u8]) -> String {
         // 使用 xxh3 64位模式（与前端一致）
         let hash = xxhash_rust::xxh3::xxh3_64(content);
-        format!("{:016x}", hash)
+        format!("{hash:016x}")
     }
 
     /// 获取文件的 MIME 类型
@@ -204,7 +204,7 @@ impl TaskHandler for SyncFilesHandler {
 
         // 重新开始遍历
         let mut entries = fs::read_dir(storage_root).await.map_err(|e| {
-            crate::ServiceError::Storage(format!("Failed to read storage root directory: {}", e))
+            crate::ServiceError::Storage(format!("Failed to read storage root directory: {e}"))
         })?;
 
         let mut processed_dirs = 0;
@@ -212,7 +212,7 @@ impl TaskHandler for SyncFilesHandler {
 
         while let Some(entry) = entries.next_entry().await.map_err(|e| {
             error!("Failed to read directory entry: {}", e);
-            crate::ServiceError::Storage(format!("Failed to read directory entry: {}", e))
+            crate::ServiceError::Storage(format!("Failed to read directory entry: {e}"))
         })? {
             processed_dirs += 1;
             let entry_path = entry.path();
@@ -251,12 +251,12 @@ impl TaskHandler for SyncFilesHandler {
 
             while let Some(current_dir) = dir_stack.pop() {
                 let mut dir_entries = fs::read_dir(&current_dir).await.map_err(|e| {
-                    crate::ServiceError::Storage(format!("Failed to read directory: {}", e))
+                    crate::ServiceError::Storage(format!("Failed to read directory: {e}"))
                 })?;
 
                 let mut file_count = 0;
                 while let Some(dir_entry) = dir_entries.next_entry().await.map_err(|e| {
-                    crate::ServiceError::Storage(format!("Failed to read directory entry: {}", e))
+                    crate::ServiceError::Storage(format!("Failed to read directory entry: {e}"))
                 })? {
                     let entry_path = dir_entry.path();
 
@@ -368,7 +368,7 @@ impl SyncFilesHandler {
         // 读取文件内容用于计算哈希
         let content = fs::read(file_path)
             .await
-            .map_err(|e| crate::ServiceError::Storage(format!("Failed to read file: {}", e)))?;
+            .map_err(|e| crate::ServiceError::Storage(format!("Failed to read file: {e}")))?;
 
         info!("Read file content: {} bytes", content.len());
 

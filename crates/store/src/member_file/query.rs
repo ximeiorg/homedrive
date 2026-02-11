@@ -210,7 +210,7 @@ impl Query {
         keyword: &str,
     ) -> Result<Vec<member_files::Model>, sea_orm::DbErr> {
         member_files::Entity::find()
-            .filter(member_files::Column::Description.like(format!("%{}%", keyword)))
+            .filter(member_files::Column::Description.like(format!("%{keyword}%")))
             .all(db)
             .await
     }
@@ -262,7 +262,7 @@ impl Query {
 
         // 应用文件名搜索
         if let Some(ref search) = query.search {
-            select = select.filter(member_files::Column::FileName.like(format!("%{}%", search)));
+            select = select.filter(member_files::Column::FileName.like(format!("%{search}%")));
         }
 
         // 应用排序

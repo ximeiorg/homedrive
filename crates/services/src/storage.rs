@@ -6,13 +6,19 @@ use tokio::io::AsyncWriteExt;
 #[async_trait]
 pub trait StorageService: Send + Sync {
     /// 保存文件
-    async fn save(&self, key: &str, content: &[u8]) -> std::result::Result<(), crate::ServiceError>;
+    async fn save(&self, key: &str, content: &[u8])
+    -> std::result::Result<(), crate::ServiceError>;
 
     /// 流式保存文件（支持大文件）
     async fn save_stream(
         &self,
         key: &str,
-        stream: std::pin::Pin<Box<dyn futures::Stream<Item = std::result::Result<bytes::Bytes, std::io::Error>> + Send>>,
+        stream: std::pin::Pin<
+            Box<
+                dyn futures::Stream<Item = std::result::Result<bytes::Bytes, std::io::Error>>
+                    + Send,
+            >,
+        >,
     ) -> std::result::Result<u64, crate::ServiceError>;
 
     /// 删除文件
@@ -64,7 +70,11 @@ impl LocalStorage {
 
 #[async_trait]
 impl StorageService for LocalStorage {
-    async fn save(&self, key: &str, content: &[u8]) -> std::result::Result<(), crate::ServiceError> {
+    async fn save(
+        &self,
+        key: &str,
+        content: &[u8],
+    ) -> std::result::Result<(), crate::ServiceError> {
         let path = self.full_path(key);
 
         // 创建父目录
@@ -86,7 +96,12 @@ impl StorageService for LocalStorage {
     async fn save_stream(
         &self,
         key: &str,
-        mut stream: std::pin::Pin<Box<dyn futures::Stream<Item = std::result::Result<bytes::Bytes, std::io::Error>> + Send>>,
+        mut stream: std::pin::Pin<
+            Box<
+                dyn futures::Stream<Item = std::result::Result<bytes::Bytes, std::io::Error>>
+                    + Send,
+            >,
+        >,
     ) -> std::result::Result<u64, crate::ServiceError> {
         use futures::StreamExt;
         use tokio::fs::File;
@@ -162,7 +177,7 @@ impl StorageService for LocalStorage {
         // 文件存储在: root/{hash_prefix}/{key}
         // 访问路径: /api/files/{storage_tag}/{file_path}
         // 由于 key 的格式是 "{storage_tag}/{file_path}"，直接返回该路径
-        Ok(format!("/api/files/{}", key))
+        Ok(format!("/api/files/{key}"))
     }
 
     async fn size(&self, key: &str) -> std::result::Result<u64, crate::ServiceError> {

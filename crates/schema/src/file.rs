@@ -1,6 +1,6 @@
 //! 文件相关的数据结构
 
-use chrono::{DateTime, Utc, TimeZone, Local};
+use chrono::{DateTime, Local, Utc};
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize)]
@@ -86,9 +86,9 @@ pub struct TaskItemResponse {
     pub status: String,
     pub progress: i32,
     pub message: String,
-    pub created_at: String,              // 本地时区时间字符串
-    pub updated_at: String,              // 本地时区时间字符串
-    pub completed_at: Option<String>,    // 本地时区时间字符串
+    pub created_at: String,           // 本地时区时间字符串
+    pub updated_at: String,           // 本地时区时间字符串
+    pub completed_at: Option<String>, // 本地时区时间字符串
 }
 
 /// 任务列表响应

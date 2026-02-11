@@ -3,12 +3,12 @@ use crate::error::AppError;
 use crate::state::AppState;
 use axum::{Json, extract::Path, extract::Query, extract::State, response::IntoResponse};
 use chrono::Utc;
+use futures::TryStreamExt;
 use sea_orm::QueryOrder;
 use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::fs::File;
 use tokio_util::io::ReaderStream;
-use futures::TryStreamExt;
 
 use schema::file::{
     HashCheckQuery, HashCheckResponse, ListFilesQuery, SyncFilesRequest, SyncFilesResponse,
@@ -31,10 +31,10 @@ pub async fn check_file_hash_exists(
 }
 
 /// Upload file handler with streaming support for large files - requires authentication
-/// 
+///
 /// Multipart form fields:
 /// - file: (required) file content
-/// 
+///
 /// Hash is automatically calculated during upload using xxh3 algorithm.
 pub async fn upload_file(
     State(state): State<Arc<AppState>>,
@@ -71,12 +71,12 @@ pub async fn upload_file(
     // 遍历 multipart 字段，找到文件
     loop {
         let field_result = multipart.next_field().await;
-        
+
         match field_result {
             Ok(Some(field)) => {
                 let field_name = field.name().unwrap_or("").to_string();
                 tracing::info!("Received multipart field: {}", field_name);
-                
+
                 if field_name == "file" {
                     // 找到文件字段，处理文件上传
                     let filename = field.file_name().unwrap_or("unknown").to_string();
@@ -84,11 +84,11 @@ pub async fn upload_file(
                         .content_type()
                         .unwrap_or("application/octet-stream")
                         .to_string();
-                    
+
                     tracing::info!("Processing file upload: {} ({})", filename, content_type);
 
                     // 将 field 转换为流
-                    let stream = field.map_err(|err| std::io::Error::other(err));
+                    let stream = field.map_err(std::io::Error::other);
 
                     // 调用 service 层处理上传，传入 storage_tag
                     match services::FileService::upload_file_stream(
@@ -99,7 +99,9 @@ pub async fn upload_file(
                         content_type,
                         filename,
                         uploader_id,
-                    ).await {
+                    )
+                    .await
+                    {
                         Ok((file_id, message)) => {
                             tracing::info!("File uploaded successfully: file_id={}", file_id);
                             return Json(UploadFileResponse {
@@ -242,7 +244,7 @@ pub async fn serve_file(
                 ),
                 (
                     axum::http::header::CONTENT_RANGE,
-                    format!("bytes {}-{}/{}", start, end, file_size),
+                    format!("bytes {start}-{end}/{file_size}"),
                 ),
             ];
             (
@@ -306,18 +308,18 @@ pub async fn list_files(
     use schema::file::FileListItem;
 
     // 通过 services 层查询文件列表
-    let (results, total) = services::FileService::list_member_files(
-        &state.conn,
-        member_id,
-        query.page,
-        query.page_size,
-        query.sort_by,
-        query.sort_order,
-        query.file_type,
-        query.search,
-    )
-    .await
-    .unwrap_or((Vec::new(), 0));
+    let params = services::ListMemberFilesParams {
+        page: query.page,
+        page_size: query.page_size,
+        sort_by: query.sort_by,
+        sort_order: query.sort_order,
+        file_type: query.file_type,
+        search: query.search,
+    };
+
+    let (results, total) = services::FileService::list_member_files(&state.conn, member_id, params)
+        .await
+        .unwrap_or((Vec::new(), 0));
 
     // 获取 base_url 用于构建文件访问 URL
     let base_url = state.config.base_url.clone();
@@ -343,7 +345,7 @@ pub async fn list_files(
             let url = if storage_path.is_empty() {
                 None
             } else {
-                Some(format!("{}/api/static/{}", base_url, storage_path))
+                Some(format!("{base_url}/api/static/{storage_path}"))
             };
 
             // 构建缩略图 URL
@@ -351,7 +353,7 @@ pub async fn list_files(
                 if t.is_empty() {
                     None
                 } else {
-                    Some(format!("{}/api/static/{}", base_url, t))
+                    Some(format!("{base_url}/api/static/{t}"))
                 }
             });
 
@@ -414,7 +416,7 @@ pub async fn trigger_sync_files(
         }),
         Err(e) => Json(TriggerSyncResponse {
             success: false,
-            message: format!("Failed to queue task: {}", e),
+            message: format!("Failed to queue task: {e}"),
         }),
     }
 }
