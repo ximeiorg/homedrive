@@ -2,6 +2,7 @@
 //!
 //! 定义应用的所有路由入口，按模块分区组织
 
+mod album;
 mod auth;
 mod file;
 mod member;
@@ -12,6 +13,7 @@ use crate::{
     handler::system::get_system_stats,
     state::AppState,
 };
+pub use album::album_router;
 pub use auth::auth_router;
 use axum::{
     Router,
@@ -36,6 +38,8 @@ pub fn routes() -> Router<Arc<AppState>> {
         .route("/system/stats", get(get_system_stats))
         // 成员模块路由（需要认证）
         .nest("/members", member_router())
+        // 相册模块路由（嵌套在 members 下）
+        .nest("/members/{id}/albums", album_router())
         // 文件模块路由
         .nest("/files", file_router())
         // 任务模块路由

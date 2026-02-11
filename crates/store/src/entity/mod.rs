@@ -2,6 +2,8 @@
 
 pub mod prelude;
 
+pub mod album_files;
+pub mod albums;
 pub mod file_contents;
 pub mod member_files;
 pub mod members;

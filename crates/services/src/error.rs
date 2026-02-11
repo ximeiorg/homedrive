@@ -28,6 +28,18 @@ pub enum ServiceError {
     #[error("invalid input: {0}")]
     InvalidInput(String),
 
+    /// 验证失败
+    #[error("{0}")]
+    Validation(String),
+
+    /// 资源不存在
+    #[error("{0}")]
+    NotFound(String),
+
+    /// 无权限
+    #[error("{0}")]
+    Forbidden(String),
+
     // ===== 系统错误 (System Errors) =====
     /// 数据库错误
     #[error("database error: {0}")]
@@ -60,6 +72,9 @@ impl ServiceError {
             | Self::UsernameExists
             | Self::InvalidCredentials
             | Self::InvalidInput(_)
+            | Self::Validation(_)
+            | Self::NotFound(_)
+            | Self::Forbidden(_)
             | Self::FileNotFound => ErrorCategory::Business,
             // 系统错误需要记录日志
             Self::Database(_) | Self::Storage(_) | Self::Unknown | Self::Other(_) => {
@@ -77,6 +92,9 @@ impl ServiceError {
                 | Self::UsernameExists
                 | Self::InvalidCredentials
                 | Self::InvalidInput(_)
+                | Self::Validation(_)
+                | Self::NotFound(_)
+                | Self::Forbidden(_)
                 | Self::FileNotFound
         )
     }

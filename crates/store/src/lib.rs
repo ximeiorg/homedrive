@@ -3,6 +3,7 @@ use std::time::Duration;
 use migration::{Migrator, MigratorTrait};
 pub use sea_orm::DatabaseConnection;
 pub use sea_orm::{ConnectOptions, Database, DbErr};
+pub mod album;
 pub mod entity;
 pub mod file_content;
 pub mod member;

@@ -4,30 +4,27 @@ use sea_orm::entity::prelude::*;
 
 #[sea_orm::model]
 #[derive(Clone, Debug, PartialEq, Eq, DeriveEntityModel)]
-#[sea_orm(table_name = "file_contents")]
+#[sea_orm(table_name = "albums")]
 pub struct Model {
     #[sea_orm(primary_key)]
     pub id: i64,
-    #[sea_orm(unique)]
-    pub content_hash: String,
-    pub file_size: i64,
-    pub storage_path: String,
-    pub mime_type: String,
-    pub width: i64,
-    pub height: i64,
-    pub duration: i64,
-    pub ref_count: i64,
+    #[sea_orm(unique_key = "idx_albums_member_id_name")]
+    pub member_id: i64,
+    #[sea_orm(unique_key = "idx_albums_member_id_name")]
+    pub name: String,
+    #[sea_orm(column_type = "Text", nullable)]
+    pub description: Option<String>,
+    pub cover_file_id: Option<i64>,
     pub created_at: DateTimeUtc,
-    pub first_uploaded_by: i64,
-    pub thumbnail: Option<String>,
+    pub updated_at: DateTimeUtc,
     #[sea_orm(has_many)]
-    pub member_files: HasMany<super::member_files::Entity>,
+    pub album_files: HasMany<super::album_files::Entity>,
     #[sea_orm(
         belongs_to,
-        from = "first_uploaded_by",
+        from = "member_id",
         to = "id",
         on_update = "Cascade",
-        on_delete = "SetNull"
+        on_delete = "Cascade"
     )]
     pub members: HasOne<super::members::Entity>,
 }

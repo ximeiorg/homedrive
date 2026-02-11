@@ -84,7 +84,7 @@ pub struct TaskItemResponse {
     pub id: i64,
     pub task_type: String,
     pub status: String,
-    pub progress: i32,
+    pub progress: i64,
     pub message: String,
     pub created_at: String,           // 本地时区时间字符串
     pub updated_at: String,           // 本地时区时间字符串

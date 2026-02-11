@@ -299,7 +299,7 @@ impl TaskHandler for SyncFilesHandler {
 
 impl SyncFilesHandler {
     /// 更新进度到数据库
-    async fn update_progress(&self, progress: i32) -> Result<()> {
+    async fn update_progress(&self, progress: i64) -> Result<()> {
         if let Some(task_message_id) = self.task_message_id {
             let active_model = store::entity::task_messages::ActiveModel {
                 id: sea_orm::Set(task_message_id),
@@ -467,7 +467,7 @@ impl SyncFilesHandler {
 
         // 节流更新进度
         if self.progress_tracker.should_update() {
-            let progress = self.progress_tracker.get_progress();
+            let progress = self.progress_tracker.get_progress() as i64;
             self.update_progress(progress).await?;
             self.progress_tracker.reset_update_time();
         }

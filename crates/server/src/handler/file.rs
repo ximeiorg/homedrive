@@ -458,7 +458,7 @@ pub async fn list_tasks(
                 id: task.id,
                 task_type: task.message_type,
                 status: task.status,
-                progress: task.progress.clamp(0, 100),
+                progress: task.progress.clamp(0i64, 100i64),
                 message,
                 created_at: schema::file::format_datetime_local(task.created_at),
                 updated_at: schema::file::format_datetime_local(task.updated_at),
@@ -477,11 +477,11 @@ pub async fn get_task(
     Path(id): Path<i64>,
 ) -> Result<Json<TaskItemResponse>, AppError> {
     use sea_orm::EntityTrait;
-    use store::entity::prelude::SyncMessages;
+    use store::entity::prelude::TaskMessages;
 
     let db = &state.conn;
 
-    let task = SyncMessages::find_by_id(id)
+    let task = TaskMessages::find_by_id(id)
         .one(db)
         .await
         .map_err(|_| AppError::NotFound)?;
