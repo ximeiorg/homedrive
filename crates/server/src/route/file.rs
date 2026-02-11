@@ -8,6 +8,7 @@ use crate::{
 };
 use axum::{
     Router,
+    extract::DefaultBodyLimit,
     routing::{get, post},
 };
 use std::sync::Arc;
@@ -18,7 +19,10 @@ pub fn file_router() -> Router<Arc<AppState>> {
         // 公开路由
         .route("/check-hash", get(check_file_hash_exists))
         // 受保护路由（使用 FromRequestParts 自动认证）
-        .route("/upload", post(upload_file))
+        .route(
+            "/upload",
+            post(upload_file).layer(DefaultBodyLimit::disable()),
+        )
         .route("/", get(list_files))
         .route("/sync", post(sync_files))
 }

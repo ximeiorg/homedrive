@@ -41,7 +41,9 @@ data class UploadUiState(
     val currentFileIndex: Int = 0,
     val error: String? = null,
     val successCount: Int = 0,
-    val errorCount: Int = 0
+    val errorCount: Int = 0,
+    val uploadComplete: Boolean = false,  // 上传完成标志
+    val completionMessage: String? = null  // 完成消息
 )
 
 class UploadViewModel(
@@ -171,10 +173,28 @@ class UploadViewModel(
             Log.i(TAG, "=== Upload completed ===")
             Log.i(TAG, "Results: success=$successCount, error=$errorCount")
             
+            // 构建完成消息
+            val message = when {
+                errorCount == 0 -> "全部上传成功！($successCount 个文件)"
+                successCount == 0 -> "上传失败！($errorCount 个文件失败)"
+                else -> "上传完成：$successCount 成功，$errorCount 失败"
+            }
+            
             _uiState.value = _uiState.value.copy(
-                isUploading = false
+                isUploading = false,
+                uploadComplete = true,
+                completionMessage = message,
+                files = emptyList()  // 清空上传列表
             )
         }
+    }
+    
+    // 重置完成状态
+    fun resetCompletionState() {
+        _uiState.value = _uiState.value.copy(
+            uploadComplete = false,
+            completionMessage = null
+        )
     }
 
     private suspend fun uploadFileFromUri(uri: Uri, fileName: String): Result<com.kingzcheung.homedrive.data.model.UploadResponse> {

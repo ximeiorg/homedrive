@@ -43,7 +43,8 @@ object AppContainer {
     fun getOkHttpClient(): OkHttpClient {
         val preferencesManager = getPreferencesManager()
         val loggingInterceptor = HttpLoggingInterceptor().apply {
-            level = HttpLoggingInterceptor.Level.BODY
+            // 使用 HEADERS 级别避免输出大量文件内容（图片等二进制数据）
+            level = HttpLoggingInterceptor.Level.HEADERS
         }
 
         return OkHttpClient.Builder()

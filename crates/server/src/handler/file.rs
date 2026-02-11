@@ -45,48 +45,96 @@ pub async fn upload_file(
     let uploader_id = auth.0;
     let storage_root = state.config.storage.volume.clone();
 
+    tracing::info!("Upload request received from user {}", uploader_id);
+
+    // 获取用户的 storage_tag
+    let user = match store::member::query::Query::find_by_id(db, uploader_id).await {
+        Ok(Some(user)) => user,
+        Ok(None) => {
+            return Json(UploadFileResponse {
+                success: false,
+                file_id: 0,
+                message: "User not found".to_string(),
+            });
+        }
+        Err(e) => {
+            return Json(UploadFileResponse {
+                success: false,
+                file_id: 0,
+                message: format!("Database error: {e}"),
+            });
+        }
+    };
+    let storage_tag = user.storage_tag;
+    tracing::info!("User storage_tag: {}", storage_tag);
+
     // 遍历 multipart 字段，找到文件
-    while let Some(field) = multipart.next_field().await.unwrap_or(None) {
-        let field_name = field.name().unwrap_or("").to_string();
+    loop {
+        let field_result = multipart.next_field().await;
         
-        if field_name == "file" {
-            // 找到文件字段，处理文件上传
-            let filename = field.file_name().unwrap_or("unknown").to_string();
-            let content_type = field
-                .content_type()
-                .unwrap_or("application/octet-stream")
-                .to_string();
+        match field_result {
+            Ok(Some(field)) => {
+                let field_name = field.name().unwrap_or("").to_string();
+                tracing::info!("Received multipart field: {}", field_name);
+                
+                if field_name == "file" {
+                    // 找到文件字段，处理文件上传
+                    let filename = field.file_name().unwrap_or("unknown").to_string();
+                    let content_type = field
+                        .content_type()
+                        .unwrap_or("application/octet-stream")
+                        .to_string();
+                    
+                    tracing::info!("Processing file upload: {} ({})", filename, content_type);
 
-            // 将 field 转换为流
-            let stream = field.map_err(|err| std::io::Error::new(std::io::ErrorKind::Other, err));
+                    // 将 field 转换为流
+                    let stream = field.map_err(|err| std::io::Error::other(err));
 
-            // 调用 service 层处理上传
-            match services::FileService::upload_file_stream(
-                db,
-                &storage_root,
-                stream,
-                content_type,
-                filename,
-                uploader_id,
-            ).await {
-                Ok((file_id, message)) => {
-                    return Json(UploadFileResponse {
-                        success: true,
-                        file_id,
-                        message,
-                    });
+                    // 调用 service 层处理上传，传入 storage_tag
+                    match services::FileService::upload_file_stream(
+                        db,
+                        &storage_root,
+                        &storage_tag,
+                        stream,
+                        content_type,
+                        filename,
+                        uploader_id,
+                    ).await {
+                        Ok((file_id, message)) => {
+                            tracing::info!("File uploaded successfully: file_id={}", file_id);
+                            return Json(UploadFileResponse {
+                                success: true,
+                                file_id,
+                                message,
+                            });
+                        }
+                        Err(e) => {
+                            tracing::error!("File upload failed: {}", e);
+                            return Json(UploadFileResponse {
+                                success: false,
+                                file_id: 0,
+                                message: e.to_string(),
+                            });
+                        }
+                    }
                 }
-                Err(e) => {
-                    return Json(UploadFileResponse {
-                        success: false,
-                        file_id: 0,
-                        message: e.to_string(),
-                    });
-                }
+            }
+            Ok(None) => {
+                tracing::warn!("No more multipart fields");
+                break;
+            }
+            Err(e) => {
+                tracing::error!("Error parsing multipart field: {}", e);
+                return Json(UploadFileResponse {
+                    success: false,
+                    file_id: 0,
+                    message: format!("Error parsing multipart request: {e}"),
+                });
             }
         }
     }
 
+    tracing::warn!("No file provided in upload request");
     Json(UploadFileResponse {
         success: false,
         file_id: 0,
@@ -315,8 +363,8 @@ pub async fn list_files(
                 mime_type,
                 thumbnail: thumbnail_url,
                 url,
-                created_at: member_file.created_at,
-                updated_at: member_file.updated_at,
+                created_at: schema::file::format_datetime_local(member_file.created_at),
+                updated_at: schema::file::format_datetime_local(member_file.updated_at),
             }
         })
         .collect();
@@ -410,9 +458,9 @@ pub async fn list_tasks(
                 status: task.status,
                 progress: task.progress.clamp(0, 100),
                 message,
-                created_at: task.created_at,
-                updated_at: task.updated_at,
-                completed_at: task.completed_at,
+                created_at: schema::file::format_datetime_local(task.created_at),
+                updated_at: schema::file::format_datetime_local(task.updated_at),
+                completed_at: task.completed_at.map(schema::file::format_datetime_local),
             }
         })
         .collect();
@@ -455,9 +503,9 @@ pub async fn get_task(
                 status: t.status,
                 progress: t.progress.clamp(0, 100),
                 message,
-                created_at: t.created_at,
-                updated_at: t.updated_at,
-                completed_at: t.completed_at,
+                created_at: schema::file::format_datetime_local(t.created_at),
+                updated_at: schema::file::format_datetime_local(t.updated_at),
+                completed_at: t.completed_at.map(schema::file::format_datetime_local),
             }))
         }
         None => Err(AppError::NotFound),

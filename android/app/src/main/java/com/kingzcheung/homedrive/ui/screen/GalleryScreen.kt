@@ -133,9 +133,7 @@ fun GalleryScreen(
             modifier = Modifier.fillMaxSize()
         ) {
             Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(top = 96.dp) // 为状态栏和顶部导航栏留出空间
+                modifier = Modifier.fillMaxSize()
             ) {
                 // 加载状态
                 when {
@@ -201,7 +199,12 @@ fun GalleryScreen(
                         Box(modifier = Modifier.weight(1f)) {
                             LazyVerticalGrid(
                                 columns = GridCells.Fixed(4),
-                                contentPadding = PaddingValues(2.dp),
+                                contentPadding = PaddingValues(
+                                    start = 2.dp,
+                                    end = 2.dp,
+                                    top = 96.dp, // 为状态栏和顶部导航栏留出空间
+                                    bottom = 80.dp // 为底部导航栏留出空间
+                                ),
                                 state = gridState,
                                 modifier = Modifier.fillMaxSize()
                             ) {

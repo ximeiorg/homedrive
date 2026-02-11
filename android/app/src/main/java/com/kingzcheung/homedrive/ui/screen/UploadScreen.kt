@@ -32,6 +32,18 @@ fun UploadScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val context = LocalContext.current
+    val snackbarHostState = remember { SnackbarHostState() }
+    
+    // 监听上传完成状态，显示 Snackbar
+    LaunchedEffect(uiState.uploadComplete) {
+        if (uiState.uploadComplete && uiState.completionMessage != null) {
+            snackbarHostState.showSnackbar(
+                message = uiState.completionMessage!!,
+                duration = SnackbarDuration.Long
+            )
+            viewModel.resetCompletionState()
+        }
+    }
 
     val imagePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetMultipleContents()
@@ -50,6 +62,15 @@ fun UploadScreen(
     }
 
     Scaffold(
+        snackbarHost = {
+            SnackbarHost(hostState = snackbarHostState) { data ->
+                Snackbar(
+                    snackbarData = data,
+                    shape = RoundedCornerShape(16.dp),
+                    modifier = Modifier.padding(16.dp)
+                )
+            }
+        },
         containerColor = MaterialTheme.colorScheme.background,
         topBar = {
             CenterAlignedTopAppBar(

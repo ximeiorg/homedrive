@@ -1,6 +1,6 @@
 //! 文件相关的数据结构
 
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Utc, TimeZone, Local};
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize)]
@@ -34,8 +34,16 @@ pub struct FileListItem {
     pub mime_type: Option<String>,
     pub thumbnail: Option<String>, // 缩略图地址
     pub url: Option<String>,       // 文件访问地址
-    pub created_at: DateTime<Utc>,
-    pub updated_at: DateTime<Utc>,
+    pub created_at: String,        // 本地时区时间字符串
+    pub updated_at: String,        // 本地时区时间字符串
+}
+
+/// 将 UTC 时间转换为本地时区字符串
+pub fn format_datetime_local(dt: DateTime<Utc>) -> String {
+    // 转换为本地时区
+    let local_dt = dt.with_timezone(&Local);
+    // 格式化为易读的字符串
+    local_dt.format("%Y-%m-%d %H:%M:%S").to_string()
 }
 
 #[derive(Serialize)]
@@ -78,9 +86,9 @@ pub struct TaskItemResponse {
     pub status: String,
     pub progress: i32,
     pub message: String,
-    pub created_at: DateTime<Utc>,
-    pub updated_at: DateTime<Utc>,
-    pub completed_at: Option<DateTime<Utc>>,
+    pub created_at: String,              // 本地时区时间字符串
+    pub updated_at: String,              // 本地时区时间字符串
+    pub completed_at: Option<String>,    // 本地时区时间字符串
 }
 
 /// 任务列表响应

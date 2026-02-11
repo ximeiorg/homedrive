@@ -45,9 +45,19 @@ impl FileService {
 
     /// 流式上传文件（支持大文件）- 边写入边计算 hash
     /// 返回 (file_id, message)
+    ///
+    /// # 参数
+    /// - `db`: 数据库连接
+    /// - `storage_root`: 存储根目录
+    /// - `storage_tag`: 用户的存储标签，用于隔离不同用户的文件
+    /// - `stream`: 文件内容流
+    /// - `mime_type`: MIME 类型
+    /// - `filename`: 文件名
+    /// - `uploader_id`: 上传者 ID
     pub async fn upload_file_stream<S, E>(
         db: &DatabaseConnection,
         storage_root: &str,
+        storage_tag: &str,
         mut stream: S,
         mime_type: String,
         filename: String,
@@ -60,8 +70,8 @@ impl FileService {
         use futures::StreamExt;
         use std::path::PathBuf;
 
-        // 生成临时存储路径（先写入临时位置）
-        let temp_key = format!("temp/{}_{}", Utc::now().timestamp_millis(), filename);
+        // 生成临时存储路径（先写入临时位置，放在 storage_tag 目录下）
+        let temp_key = format!("{}/temp/{}_{}", storage_tag, Utc::now().timestamp_millis(), filename);
         let temp_path = PathBuf::from(storage_root).join(&temp_key);
         
         // 创建临时目录
@@ -104,13 +114,43 @@ impl FileService {
         if let Some(existing_id) = Self::find_by_hash(db, &content_hash).await? {
             // 删除临时文件
             let _ = tokio::fs::remove_file(&temp_path).await;
-            return Ok((existing_id, "File already exists".to_string()));
+            
+            // 检查 member_files 是否已存在此关联
+            let association_exists = store::member_file::query::Query::association_exists(
+                db,
+                uploader_id,
+                existing_id,
+            ).await.map_err(|e| ServiceError::Database(e))?;
+            
+            if association_exists {
+                // 用户已经有这个文件了
+                return Ok((existing_id, "File already exists in your collection".to_string()));
+            }
+            
+            // 增加 file_contents 的引用计数
+            store::file_content::mutation::Mutation::increment_ref_count(db, existing_id)
+                .await.map_err(|e| ServiceError::Database(e))?;
+            
+            // 创建 member_files 关联记录
+            let member_file_data = store::member_file::mutation::CreateMemberFile {
+                member_id: uploader_id,
+                file_content_id: existing_id,
+                file_name: filename.clone(),
+                description: String::new(),
+            };
+            
+            store::member_file::mutation::Mutation::create(db, member_file_data)
+                .await.map_err(|e| ServiceError::Database(e))?;
+            
+            return Ok((existing_id, "File linked to your collection (duplicate content)".to_string()));
         }
 
-        // 生成最终存储路径
+        // 生成最终存储路径（包含 storage_tag）
+        // 格式: {storage_tag}/{year}/{month}/{hash}/{filename}
         let storage_key = format!(
-            "files/{}/{}/{}",
-            Utc::now().format("%Y/%m/%d"),
+            "{}/{}/{}/{}",
+            storage_tag,
+            Utc::now().format("%Y/%m"),
             content_hash,
             filename
         );
@@ -132,9 +172,9 @@ impl FileService {
             let _ = tokio::fs::remove_file(&temp_path).await;
         }
 
-        // 创建数据库记录
+        // 创建 file_contents 数据库记录
         let create_data = store::file_content::mutation::CreateFileContent {
-            content_hash,
+            content_hash: content_hash.clone(),
             file_size: file_size as i64,
             storage_path: storage_key,
             mime_type,
@@ -145,7 +185,19 @@ impl FileService {
         };
 
         let file_content = store::file_content::mutation::Mutation::create(db, create_data).await?;
-        Ok((file_content.id, "File uploaded successfully".to_string()))
+        let file_content_id = file_content.id;
+        
+        // 创建 member_files 关联记录
+        let member_file_data = store::member_file::mutation::CreateMemberFile {
+            member_id: uploader_id,
+            file_content_id,
+            file_name: filename.clone(),
+            description: String::new(),
+        };
+        
+        store::member_file::mutation::Mutation::create(db, member_file_data).await?;
+        
+        Ok((file_content_id, "File uploaded successfully".to_string()))
     }
 
     /// 上传文件（保存文件数据到存储，并创建数据库记录）
