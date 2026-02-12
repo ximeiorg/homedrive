@@ -58,6 +58,7 @@ pub struct AlbumListItem {
     pub name: String,
     pub description: Option<String>,
     pub cover_file_id: Option<i64>,
+    pub cover_url: Option<String>, // 封面图片 URL
     pub file_count: u64,
     pub created_at: chrono::DateTime<chrono::Utc>,
     pub updated_at: chrono::DateTime<chrono::Utc>,
@@ -80,6 +81,8 @@ pub struct AlbumFileInfo {
     pub file_size: i64,
     pub mime_type: String,
     pub description: String,
+    pub thumbnail: Option<String>, // 缩略图 URL
+    pub url: Option<String>,       // 原图 URL
     pub created_at: chrono::DateTime<chrono::Utc>,
     pub updated_at: chrono::DateTime<chrono::Utc>,
 }

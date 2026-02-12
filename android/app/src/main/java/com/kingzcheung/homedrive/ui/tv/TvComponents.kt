@@ -26,6 +26,7 @@ import coil.request.ImageRequest
 import com.kingzcheung.homedrive.data.model.Album
 import com.kingzcheung.homedrive.data.model.FileItem
 import com.kingzcheung.homedrive.data.model.FileType
+import com.kingzcheung.homedrive.ui.screen.rememberStaticUrl
 
 /**
  * TV 优化的图库网格布局
@@ -267,10 +268,10 @@ fun TvAlbumCard(
         } else null
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
-            if (album.cover != null) {
+            if (album.coverUrl != null) {
                 AsyncImage(
                     model = ImageRequest.Builder(LocalContext.current)
-                        .data(album.cover)
+                        .data(rememberStaticUrl(album.coverUrl))
                         .crossfade(true)
                         .build(),
                     contentDescription = album.name,
@@ -319,7 +320,7 @@ fun TvAlbumCard(
                     overflow = TextOverflow.Ellipsis
                 )
                 Text(
-                    text = "${album.count} 张照片",
+                    text = "${album.fileCount} 张照片",
                     style = MaterialTheme.typography.bodyMedium,
                     color = Color.White.copy(alpha = 0.8f)
                 )

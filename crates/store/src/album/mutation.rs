@@ -15,7 +15,7 @@ pub struct CreateAlbum {
 }
 
 /// 更新相册的参数
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Default, Serialize, Deserialize)]
 pub struct UpdateAlbum {
     pub name: Option<String>,
     pub description: Option<String>,
@@ -55,8 +55,7 @@ impl Mutation {
         data: UpdateAlbum,
     ) -> Result<albums::Model, sea_orm::DbErr> {
         let album: Option<albums::Model> = albums::Entity::find_by_id(id).one(db).await?;
-        let album = album
-            .ok_or_else(|| sea_orm::DbErr::Custom("Album not found".to_string()))?;
+        let album = album.ok_or_else(|| sea_orm::DbErr::Custom("Album not found".to_string()))?;
 
         let mut active_model: albums::ActiveModel = album.into();
 
@@ -73,12 +72,19 @@ impl Mutation {
         active_model.update(db).await
     }
 
-    /// 删除相册
+    /// 删除相册（同时删除关联的 album_files 记录）
     pub async fn delete_album(
         db: &DatabaseConnection,
-        id: i64,
+        album_id: i64,
     ) -> Result<DeleteResult, sea_orm::DbErr> {
-        albums::Entity::delete_by_id(id).exec(db).await
+        // 先删除关联的 album_files 记录
+        album_files::Entity::delete_many()
+            .filter(album_files::Column::AlbumId.eq(album_id))
+            .exec(db)
+            .await?;
+        
+        // 再删除相册本身
+        albums::Entity::delete_by_id(album_id).exec(db).await
     }
 
     /// 添加文件到相册
@@ -158,8 +164,7 @@ impl Mutation {
         cover_file_id: Option<i64>,
     ) -> Result<albums::Model, sea_orm::DbErr> {
         let album: Option<albums::Model> = albums::Entity::find_by_id(id).one(db).await?;
-        let album = album
-            .ok_or_else(|| sea_orm::DbErr::Custom("Album not found".to_string()))?;
+        let album = album.ok_or_else(|| sea_orm::DbErr::Custom("Album not found".to_string()))?;
 
         let mut active_model: albums::ActiveModel = album.into();
         active_model.cover_file_id = Set(cover_file_id);

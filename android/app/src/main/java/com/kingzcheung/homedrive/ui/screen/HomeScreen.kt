@@ -199,7 +199,8 @@ fun HomeScreen(
                         AlbumScreen(
                             onNavigateBack = { navController.popBackStack() },
                             onAlbumClick = { /* Navigate to album detail */ },
-                            viewModel = albumViewModel
+                            viewModel = albumViewModel,
+                            modifier = Modifier.padding(bottom = 60.dp)
                         )
                     }
 
@@ -229,6 +230,10 @@ fun HomeScreen(
         }
         
         // 自定义顶部栏（包含状态栏和导航栏）
+        // 获取当前页面路由
+        val navBackStackEntry by navController.currentBackStackEntryAsState()
+        val currentRoute = navBackStackEntry?.destination?.route
+        
         Column(
             modifier = Modifier.fillMaxWidth()
         ) {
@@ -241,7 +246,7 @@ fun HomeScreen(
                     .windowInsetsTopHeight(WindowInsets.statusBars)
             )
             
-            // 顶部导航栏 - 紧凑高度
+            // 顶部导航栏 - 紧凑高度，根据当前页面显示不同操作
             Surface(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -263,25 +268,55 @@ fun HomeScreen(
                             .weight(1f)
                             .alpha(titleAlpha)
                     )
-                    IconButton(
-                        onClick = { navController.navigate(Screen.Upload.route) },
-                        modifier = Modifier.size(40.dp)
-                    ) {
-                        Icon(
-                            Icons.Default.Add,
-                            contentDescription = "上传",
-                            modifier = Modifier.size(22.dp)
-                        )
-                    }
-                    IconButton(
-                        onClick = { navController.navigate(Screen.Settings.route) },
-                        modifier = Modifier.size(40.dp)
-                    ) {
-                        Icon(
-                            Icons.Default.Settings,
-                            contentDescription = "设置",
-                            modifier = Modifier.size(22.dp)
-                        )
+                    
+                    // 根据当前页面显示不同的操作按钮
+                    when (currentRoute) {
+                        Screen.Albums.route -> {
+                            // 相册页面：创建相册 + 设置（只有一项操作，直接点击触发）
+                            IconButton(
+                                onClick = { albumViewModel.showCreateDialog() },
+                                modifier = Modifier.size(40.dp)
+                            ) {
+                                Icon(
+                                    Icons.Default.Add,
+                                    contentDescription = "创建相册",
+                                    modifier = Modifier.size(22.dp)
+                                )
+                            }
+                            IconButton(
+                                onClick = { navController.navigate(Screen.Settings.route) },
+                                modifier = Modifier.size(40.dp)
+                            ) {
+                                Icon(
+                                    Icons.Default.Settings,
+                                    contentDescription = "设置",
+                                    modifier = Modifier.size(22.dp)
+                                )
+                            }
+                        }
+                        else -> {
+                            // 其他页面（首页）：上传 + 设置
+                            IconButton(
+                                onClick = { navController.navigate(Screen.Upload.route) },
+                                modifier = Modifier.size(40.dp)
+                            ) {
+                                Icon(
+                                    Icons.Default.Add,
+                                    contentDescription = "上传",
+                                    modifier = Modifier.size(22.dp)
+                                )
+                            }
+                            IconButton(
+                                onClick = { navController.navigate(Screen.Settings.route) },
+                                modifier = Modifier.size(40.dp)
+                            ) {
+                                Icon(
+                                    Icons.Default.Settings,
+                                    contentDescription = "设置",
+                                    modifier = Modifier.size(22.dp)
+                                )
+                            }
+                        }
                     }
                 }
             }

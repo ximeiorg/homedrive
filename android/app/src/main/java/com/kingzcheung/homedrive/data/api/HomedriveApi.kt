@@ -50,23 +50,61 @@ interface HomedriveApi {
         @Query("page_size") pageSize: Int = DEFAULT_PAGE_SIZE
     ): Response<FileListResponse>
 
-    // ============ 图集 ============
+    // ============ 相册 ============
 
-    @GET("albums")
+    @GET("members/{memberId}/albums")
     suspend fun getAlbums(
+        @Path("memberId") memberId: Long,
         @Query("page") page: Int = 1,
         @Query("page_size") pageSize: Int = DEFAULT_PAGE_SIZE
-    ): Response<PaginatedResponse<Album>>
+    ): Response<AlbumListResponse>
 
-    @GET("albums/{id}")
-    suspend fun getAlbum(@Path("id") id: Long): Response<Album>
+    @GET("members/{memberId}/albums/{albumId}")
+    suspend fun getAlbum(
+        @Path("memberId") memberId: Long,
+        @Path("albumId") albumId: Long
+    ): Response<AlbumResponse>
 
-    @GET("albums/{id}/files")
+    @POST("members/{memberId}/albums")
+    suspend fun createAlbum(
+        @Path("memberId") memberId: Long,
+        @Body request: CreateAlbumRequest
+    ): Response<AlbumResponse>
+
+    @PUT("members/{memberId}/albums/{albumId}")
+    suspend fun updateAlbum(
+        @Path("memberId") memberId: Long,
+        @Path("albumId") albumId: Long,
+        @Body request: UpdateAlbumRequest
+    ): Response<AlbumResponse>
+
+    @DELETE("members/{memberId}/albums/{albumId}")
+    suspend fun deleteAlbum(
+        @Path("memberId") memberId: Long,
+        @Path("albumId") albumId: Long
+    ): Response<Unit>
+
+    @GET("members/{memberId}/albums/{albumId}/files")
     suspend fun getAlbumFiles(
-        @Path("id") id: Long,
+        @Path("memberId") memberId: Long,
+        @Path("albumId") albumId: Long,
         @Query("page") page: Int = 1,
         @Query("page_size") pageSize: Int = DEFAULT_PAGE_SIZE
-    ): Response<PaginatedResponse<FileItem>>
+    ): Response<AlbumFilesResponse>
+
+    @POST("members/{memberId}/albums/{albumId}/files")
+    suspend fun addFilesToAlbum(
+        @Path("memberId") memberId: Long,
+        @Path("albumId") albumId: Long,
+        @Body request: AddFilesRequest
+    ): Response<AddFilesResponse>
+
+    @HTTP(method = "DELETE", path = "members/{memberId}/albums/{albumId}/files", hasBody = true)
+    suspend fun removeFilesFromAlbum(
+        @Path("memberId") memberId: Long,
+        @Path("albumId") albumId: Long,
+        @Body request: RemoveFilesRequest
+    ): Response<RemoveFilesResponse>
 
     // ============ 分享 ============
 

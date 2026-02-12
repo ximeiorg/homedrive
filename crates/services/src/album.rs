@@ -117,10 +117,10 @@ impl AlbumService {
 
         // 如果要更新名称，检查新名称是否已存在
         if let Some(ref name) = params.name {
-            if name != &album.name {
-                if store::album::query::Query::album_name_exists(db, member_id, name).await? {
-                    return Err(ServiceError::Validation("相册名称已存在".to_string()));
-                }
+            if name != &album.name
+                && store::album::query::Query::album_name_exists(db, member_id, name).await?
+            {
+                return Err(ServiceError::Validation("相册名称已存在".to_string()));
             }
         }
 
@@ -266,7 +266,23 @@ impl AlbumService {
         }
 
         let count = valid_file_ids.len() as u64;
+        let first_file_id = valid_file_ids.first().copied();
         store::album::mutation::Mutation::add_files_to_album(db, album_id, valid_file_ids).await?;
+
+        // 如果相册没有封面，自动设置第一个添加的文件为封面
+        if album.cover_file_id.is_none() {
+            if let Some(file_id) = first_file_id {
+                store::album::mutation::Mutation::update_album(
+                    db,
+                    album_id,
+                    store::album::mutation::UpdateAlbum {
+                        cover_file_id: Some(file_id),
+                        ..Default::default()
+                    },
+                )
+                .await?;
+            }
+        }
 
         Ok(count)
     }

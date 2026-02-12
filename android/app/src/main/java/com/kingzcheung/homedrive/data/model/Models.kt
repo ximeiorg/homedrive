@@ -91,14 +91,126 @@ enum class FileType {
     @SerializedName("video") VIDEO
 }
 
-// 图集模型
+// 相册模型 - 列表项
 data class Album(
     @SerializedName("id") val id: Long,
     @SerializedName("name") val name: String,
-    @SerializedName("cover") val cover: String? = null,
-    @SerializedName("count") val count: Int = 0,
+    @SerializedName("description") val description: String? = null,
+    @SerializedName("cover_file_id") val coverFileId: Long? = null,
+    @SerializedName("cover_url") val coverUrl: String? = null,
+    @SerializedName("file_count") val fileCount: Long = 0,
     @SerializedName("created_at") val createdAt: String,
     @SerializedName("updated_at") val updatedAt: String
+)
+
+// 相册详情响应
+data class AlbumResponse(
+    @SerializedName("id") val id: Long,
+    @SerializedName("member_id") val memberId: Long,
+    @SerializedName("name") val name: String,
+    @SerializedName("description") val description: String? = null,
+    @SerializedName("cover_file_id") val coverFileId: Long? = null,
+    @SerializedName("file_count") val fileCount: Long = 0,
+    @SerializedName("created_at") val createdAt: String,
+    @SerializedName("updated_at") val updatedAt: String
+)
+
+// 相册列表响应
+data class AlbumListResponse(
+    @SerializedName("albums") val albums: List<Album>,
+    @SerializedName("total") val total: Long,
+    @SerializedName("page") val page: Long,
+    @SerializedName("page_size") val pageSize: Long
+) {
+    fun toPaginatedResponse(): PaginatedResponse<Album> {
+        return PaginatedResponse(
+            data = albums,
+            page = page.toInt(),
+            pageSize = pageSize.toInt(),
+            total = total,
+            hasMore = (page * pageSize) < total
+        )
+    }
+}
+
+// 相册文件信息
+data class AlbumFile(
+    @SerializedName("id") val id: Long,
+    @SerializedName("file_name") val fileName: String,
+    @SerializedName("file_size") val fileSize: Long,
+    @SerializedName("mime_type") val mimeType: String,
+    @SerializedName("description") val description: String,
+    @SerializedName("thumbnail") val thumbnail: String? = null,
+    @SerializedName("url") val url: String? = null,
+    @SerializedName("created_at") val createdAt: String,
+    @SerializedName("updated_at") val updatedAt: String
+) {
+    fun toFileItem(): FileItem {
+        return FileItem(
+            id = id,
+            name = fileName,
+            description = description,
+            size = fileSize,
+            mimeType = mimeType,
+            thumbnail = thumbnail,
+            url = url,
+            createdAt = createdAt,
+            updatedAt = updatedAt
+        )
+    }
+}
+
+// 相册文件列表响应
+data class AlbumFilesResponse(
+    @SerializedName("files") val files: List<AlbumFile>,
+    @SerializedName("total") val total: Long,
+    @SerializedName("page") val page: Long,
+    @SerializedName("page_size") val pageSize: Long
+) {
+    fun toPaginatedResponse(): PaginatedResponse<FileItem> {
+        return PaginatedResponse(
+            data = files.map { it.toFileItem() },
+            page = page.toInt(),
+            pageSize = pageSize.toInt(),
+            total = total,
+            hasMore = (page * pageSize) < total
+        )
+    }
+}
+
+// 创建相册请求
+data class CreateAlbumRequest(
+    @SerializedName("name") val name: String,
+    @SerializedName("description") val description: String? = null,
+    @SerializedName("cover_file_id") val coverFileId: Long? = null,
+    @SerializedName("file_ids") val fileIds: List<Long>? = null
+)
+
+// 更新相册请求
+data class UpdateAlbumRequest(
+    @SerializedName("name") val name: String? = null,
+    @SerializedName("description") val description: String? = null,
+    @SerializedName("cover_file_id") val coverFileId: Long? = null
+)
+
+// 添加文件到相册请求
+data class AddFilesRequest(
+    @SerializedName("file_ids") val fileIds: List<Long>
+)
+
+// 从相册移除文件请求
+data class RemoveFilesRequest(
+    @SerializedName("file_ids") val fileIds: List<Long>
+)
+
+// 添加文件响应
+data class AddFilesResponse(
+    @SerializedName("added_count") val addedCount: Long
+)
+
+// 移除文件响应
+data class RemoveFilesResponse(
+    @SerializedName("removed_count") val removedCount: Long
 )
 
 // 分享模型

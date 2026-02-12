@@ -1,12 +1,7 @@
 use crate::auth::Authorized;
 use crate::error::AppError;
 use crate::state::AppState;
-use axum::{
-    extract::Path,
-    extract::Query,
-    extract::State,
-    Json,
-};
+use axum::{Json, extract::Path, extract::Query, extract::State};
 use std::sync::Arc;
 
 use schema::album::{
@@ -28,10 +23,18 @@ pub async fn create_album(
         return Err(AppError::Forbidden);
     }
 
+
+    // 如果没有封面文件 ID，则使用第一个文件 ID 作为封面
+    let first = request.file_ids.clone().and_then(|v| v.first().cloned());
+    let cover_file_id = request.cover_file_id.or(first);
+
+    dbg!(cover_file_id);
+    dbg!(&request.file_ids);
+
     let params = services::CreateAlbumParams {
         name: request.name,
         description: request.description,
-        cover_file_id: request.cover_file_id,
+        cover_file_id,
         file_ids: request.file_ids,
     };
 
@@ -69,18 +72,40 @@ pub async fn list_albums(
         services::AlbumService::list_albums(&state.conn, member_id, Some(page), Some(page_size))
             .await?;
 
-    let items: Vec<AlbumListItem> = albums
-        .into_iter()
-        .map(|a| AlbumListItem {
+    // 获取封面 URL
+    let mut items = Vec::new();
+    for a in albums {
+        let cover_url = if let Some(file_id) = a.cover_file_id {
+            // 同步查询封面文件的 storage_path
+            if let Ok(Some(member_file)) = store::member_file::query::Query::find_by_id(&state.conn, file_id).await {
+                if let Ok(Some(file_content)) = store::file_content::query::Query::find_by_id(&state.conn, member_file.file_content_id).await {
+                    let storage_path = file_content.storage_path;
+                    if !storage_path.is_empty() {
+                        Some(format!("{}/api/static/{}", state.config.base_url, storage_path))
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                }
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+        
+        items.push(AlbumListItem {
             id: a.id,
             name: a.name,
             description: a.description,
             cover_file_id: a.cover_file_id,
+            cover_url,
             file_count: a.file_count,
             created_at: a.created_at,
             updated_at: a.updated_at,
-        })
-        .collect();
+        });
+    }
 
     Ok(Json(AlbumListResponse {
         albums: items,
@@ -197,10 +222,33 @@ pub async fn list_album_files(
     let file_infos: Vec<AlbumFileInfo> = files
         .into_iter()
         .map(|(member_file, file_content)| {
-            let (file_size, mime_type) = match file_content {
-                Some(fc) => (fc.file_size, fc.mime_type),
-                None => (0, "application/octet-stream".to_string()),
+            // 从 file_content 获取 storage_path 和 thumbnail
+            let (storage_path, mime_type, file_size, thumbnail) = match file_content {
+                Some(ref fc) => (
+                    fc.storage_path.clone(),
+                    fc.mime_type.clone(),
+                    fc.file_size,
+                    fc.thumbnail.clone(),
+                ),
+                None => (String::new(), "application/octet-stream".to_string(), 0, None),
             };
+
+            // 构建文件访问 URL: {base_url}/api/static/{storage_path}
+            // storage_path 格式: storage_tag/file_path
+            let url = if storage_path.is_empty() {
+                None
+            } else {
+                Some(format!("{}/api/static/{}", state.config.base_url, storage_path))
+            };
+
+            // 构建缩略图 URL
+            let thumbnail_url = thumbnail.and_then(|t| {
+                if t.is_empty() {
+                    None
+                } else {
+                    Some(format!("{}/api/static/{}", state.config.base_url, t))
+                }
+            });
 
             AlbumFileInfo {
                 id: member_file.id,
@@ -208,6 +256,8 @@ pub async fn list_album_files(
                 file_size,
                 mime_type,
                 description: member_file.description,
+                thumbnail: thumbnail_url,
+                url,
                 created_at: member_file.created_at,
                 updated_at: member_file.updated_at,
             }
@@ -235,9 +285,13 @@ pub async fn add_files_to_album(
         return Err(AppError::Forbidden);
     }
 
-    let added_count =
-        services::AlbumService::add_files_to_album(&state.conn, member_id, album_id, request.file_ids)
-            .await?;
+    let added_count = services::AlbumService::add_files_to_album(
+        &state.conn,
+        member_id,
+        album_id,
+        request.file_ids,
+    )
+    .await?;
 
     Ok(Json(AddFilesResponse { added_count }))
 }

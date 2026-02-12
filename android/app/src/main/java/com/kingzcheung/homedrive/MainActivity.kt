@@ -11,6 +11,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import kotlinx.coroutines.flow.first
 import com.kingzcheung.homedrive.di.AppContainer
+import com.kingzcheung.homedrive.di.AuthInterceptor
 import com.kingzcheung.homedrive.ui.screen.HomeScreen
 import com.kingzcheung.homedrive.ui.screen.LoginScreen
 import com.kingzcheung.homedrive.ui.theme.HomedriveTheme
@@ -27,7 +28,7 @@ class MainActivity : ComponentActivity() {
         // Create ViewModels
         val galleryViewModel = GalleryViewModel()
         val uploadViewModel = UploadViewModel(api, preferencesManager)
-        val albumViewModel = AlbumViewModel(api)
+        val albumViewModel = AlbumViewModel(api, preferencesManager)
         val shareViewModel = ShareViewModel(api)
         val settingsViewModel = SettingsViewModel(
             authRepository = com.kingzcheung.homedrive.data.repository.AuthRepository(api, preferencesManager),
@@ -45,6 +46,16 @@ class MainActivity : ComponentActivity() {
                     color = MaterialTheme.colorScheme.background
                 ) {
                     var isLoggedIn by remember { mutableStateOf<Boolean?>(null) }
+
+                    // 设置 401 未授权回调，自动登出
+                    DisposableEffect(Unit) {
+                        AuthInterceptor.onUnauthorized = {
+                            isLoggedIn = false
+                        }
+                        onDispose {
+                            AuthInterceptor.onUnauthorized = null
+                        }
+                    }
 
                     LaunchedEffect(Unit) {
                         // 检查是否已登录（通过检查 token 是否存在）

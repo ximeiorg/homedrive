@@ -145,14 +145,21 @@ class FileRepository(
 }
 
 class AlbumRepository(
-    private val api: HomedriveApi
+    private val api: HomedriveApi,
+    private val preferencesManager: PreferencesManager
 ) {
+    private suspend fun getMemberId(): Long {
+        val member = preferencesManager.member.first()
+        return member?.id ?: throw Exception("User not logged in")
+    }
+
     suspend fun getAlbums(page: Int = 1): Result<PaginatedResponse<Album>> {
         return try {
-            val response = api.getAlbums(page)
+            val memberId = getMemberId()
+            val response = api.getAlbums(memberId, page)
             if (response.isSuccessful) {
                 response.body()?.let {
-                    Result.success(it)
+                    Result.success(it.toPaginatedResponse())
                 } ?: Result.failure(Exception("Empty response"))
             } else {
                 Result.failure(Exception("Failed to get albums: ${response.message()}"))
@@ -162,9 +169,10 @@ class AlbumRepository(
         }
     }
 
-    suspend fun getAlbum(id: Long): Result<Album> {
+    suspend fun getAlbum(id: Long): Result<AlbumResponse> {
         return try {
-            val response = api.getAlbum(id)
+            val memberId = getMemberId()
+            val response = api.getAlbum(memberId, id)
             if (response.isSuccessful) {
                 response.body()?.let {
                     Result.success(it)
@@ -177,15 +185,94 @@ class AlbumRepository(
         }
     }
 
-    suspend fun getAlbumFiles(id: Long, page: Int = 1): Result<PaginatedResponse<FileItem>> {
+    suspend fun createAlbum(request: CreateAlbumRequest): Result<AlbumResponse> {
         return try {
-            val response = api.getAlbumFiles(id, page)
+            val memberId = getMemberId()
+            val response = api.createAlbum(memberId, request)
             if (response.isSuccessful) {
                 response.body()?.let {
                     Result.success(it)
                 } ?: Result.failure(Exception("Empty response"))
             } else {
+                Result.failure(Exception("Failed to create album: ${response.message()}"))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun updateAlbum(albumId: Long, request: UpdateAlbumRequest): Result<AlbumResponse> {
+        return try {
+            val memberId = getMemberId()
+            val response = api.updateAlbum(memberId, albumId, request)
+            if (response.isSuccessful) {
+                response.body()?.let {
+                    Result.success(it)
+                } ?: Result.failure(Exception("Empty response"))
+            } else {
+                Result.failure(Exception("Failed to update album: ${response.message()}"))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun deleteAlbum(albumId: Long): Result<Unit> {
+        return try {
+            val memberId = getMemberId()
+            val response = api.deleteAlbum(memberId, albumId)
+            if (response.isSuccessful) {
+                Result.success(Unit)
+            } else {
+                Result.failure(Exception("Failed to delete album: ${response.message()}"))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun getAlbumFiles(albumId: Long, page: Int = 1): Result<PaginatedResponse<FileItem>> {
+        return try {
+            val memberId = getMemberId()
+            val response = api.getAlbumFiles(memberId, albumId, page)
+            if (response.isSuccessful) {
+                response.body()?.let {
+                    Result.success(it.toPaginatedResponse())
+                } ?: Result.failure(Exception("Empty response"))
+            } else {
                 Result.failure(Exception("Failed to get album files: ${response.message()}"))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun addFilesToAlbum(albumId: Long, fileIds: List<Long>): Result<AddFilesResponse> {
+        return try {
+            val memberId = getMemberId()
+            val response = api.addFilesToAlbum(memberId, albumId, AddFilesRequest(fileIds))
+            if (response.isSuccessful) {
+                response.body()?.let {
+                    Result.success(it)
+                } ?: Result.failure(Exception("Empty response"))
+            } else {
+                Result.failure(Exception("Failed to add files: ${response.message()}"))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun removeFilesFromAlbum(albumId: Long, fileIds: List<Long>): Result<RemoveFilesResponse> {
+        return try {
+            val memberId = getMemberId()
+            val response = api.removeFilesFromAlbum(memberId, albumId, RemoveFilesRequest(fileIds))
+            if (response.isSuccessful) {
+                response.body()?.let {
+                    Result.success(it)
+                } ?: Result.failure(Exception("Empty response"))
+            } else {
+                Result.failure(Exception("Failed to remove files: ${response.message()}"))
             }
         } catch (e: Exception) {
             Result.failure(e)

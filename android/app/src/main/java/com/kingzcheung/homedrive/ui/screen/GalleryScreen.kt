@@ -300,7 +300,8 @@ fun FileGridItem(
                     }
                 }
                 FileType.IMAGE -> {
-                    val imageUrl = rememberStaticUrl(file.url)
+                    // 优先使用 thumbnail，其次使用 url
+                    val imageUrl = rememberStaticUrl(file.thumbnail ?: file.url ?: "")
                     Log.d(TAG, "Loading image for ${file.name}: $imageUrl")
                     
                     SubcomposeAsyncImage(
