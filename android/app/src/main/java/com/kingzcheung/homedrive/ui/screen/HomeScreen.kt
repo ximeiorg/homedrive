@@ -84,6 +84,9 @@ fun HomeScreen(
     var showMediaViewer by remember { mutableStateOf(false) }
     var selectedFileIndex by remember { mutableStateOf(0) }
     
+    // 控制底部导航栏显示状态
+    var showBottomNav by remember { mutableStateOf(true) }
+    
     // 获取当前文件列表
     val galleryUiState by galleryViewModel.uiState.collectAsState()
     val mediaFiles = galleryUiState.files.filter { it.type == FileType.IMAGE || it.type == FileType.VIDEO }
@@ -123,7 +126,7 @@ fun HomeScreen(
                         it.route == Screen.Gallery.route || it.route == Screen.Albums.route 
                     } == true
                     
-                    if (showNavBar) {
+                    if (showNavBar && showBottomNav) {
                         FloatingBottomNavBar(
                             items = listOf(Screen.Gallery, Screen.Albums),
                             currentDestination = currentDestination,
@@ -200,6 +203,12 @@ fun HomeScreen(
                             onNavigateBack = { navController.popBackStack() },
                             onAlbumClick = { /* Navigate to album detail */ },
                             viewModel = albumViewModel,
+                            onShowMediaViewer = {
+                                showBottomNav = false
+                            },
+                            onHideMediaViewer = {
+                                showBottomNav = true
+                            },
                             modifier = Modifier.padding(bottom = 60.dp)
                         )
                     }

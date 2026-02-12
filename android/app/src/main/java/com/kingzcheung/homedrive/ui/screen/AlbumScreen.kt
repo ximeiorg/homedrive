@@ -38,6 +38,8 @@ import kotlinx.coroutines.launch
 fun AlbumScreen(
     onNavigateBack: () -> Unit,
     onAlbumClick: (Album) -> Unit,
+    onShowMediaViewer: () -> Unit,
+    onHideMediaViewer: () -> Unit,
     viewModel: AlbumViewModel,
     modifier: Modifier = Modifier
 ) {
@@ -45,9 +47,9 @@ fun AlbumScreen(
     val gridState = rememberLazyGridState()
     var isRefreshing by remember { mutableStateOf(false) }
 
-    // 处理刷新状态
-    LaunchedEffect(uiState.isLoading) {
-        if (!uiState.isLoading) {
+    // 处理刷新状态 - 只有在手动刷新时才关闭刷新指示器
+    LaunchedEffect(uiState.isLoading, isRefreshing) {
+        if (isRefreshing && !uiState.isLoading) {
             isRefreshing = false
         }
     }
@@ -101,7 +103,8 @@ fun AlbumScreen(
                         onFileClick = { index, _ ->
                             viewModel.openMediaViewer(index)
                         },
-                        onLoadMore = { viewModel.loadMoreAlbumFiles() }
+                        onLoadMore = { viewModel.loadMoreAlbumFiles() },
+                        onAddFilesClick = { viewModel.showAddFilesToCurrentAlbum() }
                     )
                 } else {
                     // 显示相册列表
@@ -144,11 +147,17 @@ fun AlbumScreen(
 
     // 全屏媒体查看器
     if (uiState.showMediaViewer && uiState.albumFiles.isNotEmpty()) {
+        LaunchedEffect(Unit) {
+            onShowMediaViewer()
+        }
         val mediaViewerViewModel = rememberMediaViewerViewModel()
         AlbumMediaViewer(
             files = uiState.albumFiles,
             initialIndex = uiState.selectedFileIndex,
-            onNavigateBack = { viewModel.closeMediaViewer() },
+            onNavigateBack = { 
+                viewModel.closeMediaViewer()
+                onHideMediaViewer()
+            },
             viewModel = mediaViewerViewModel
         )
     }
@@ -438,6 +447,42 @@ private fun SelectableFileItem(
 }
 
 @Composable
+private fun AddFilesButton(
+    onClick: () -> Unit
+) {
+    Card(
+        modifier = Modifier
+            .aspectRatio(1f)
+            .clip(MaterialTheme.shapes.small)
+            .clickable(onClick = onClick),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant
+        )
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(8.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Icon(
+                imageVector = Icons.Default.AddPhotoAlternate,
+                contentDescription = "添加图片",
+                modifier = Modifier.size(32.dp),
+                tint = MaterialTheme.colorScheme.primary
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = "添加图片",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.primary
+            )
+        }
+    }
+}
+
+@Composable
 private fun rememberAlbumStaticUrl(url: String?): String {
     val scope = rememberCoroutineScope()
     var staticUrl by remember { mutableStateOf("") }
@@ -632,7 +677,8 @@ private fun AlbumFilesGrid(
     hasMore: Boolean,
     gridState: androidx.compose.foundation.lazy.grid.LazyGridState,
     onFileClick: (Int, FileItem) -> Unit,
-    onLoadMore: () -> Unit
+    onLoadMore: () -> Unit,
+    onAddFilesClick: () -> Unit
 ) {
     LaunchedEffect(gridState) {
         snapshotFlow { gridState.layoutInfo.visibleItemsInfo.lastOrNull()?.index }
@@ -663,6 +709,25 @@ private fun AlbumFilesGrid(
                 onClick = { onFileClick(index, file) },
                 onLongClick = { }
             )
+        }
+        
+        // 加载更多指示器
+        if (isLoadingMore && hasMore) {
+            item {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator(modifier = Modifier.size(24.dp))
+                }
+            }
+        }
+        
+        // 添加图片按钮 - 始终显示在最后
+        item(key = "add_files") {
+            AddFilesButton(onClick = onAddFilesClick)
         }
     }
 }
