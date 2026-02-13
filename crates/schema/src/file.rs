@@ -2,14 +2,17 @@
 
 use chrono::{DateTime, Local, Utc};
 use serde::{Deserialize, Serialize};
+use validator::Validate;
 
 #[derive(Serialize)]
 pub struct HashCheckResponse {
     pub exists: bool,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Validate)]
 pub struct HashCheckQuery {
+    /// 文件哈希值，必须是有效的xxh3哈希（32位十六进制）
+    #[validate(length(min = 32, max = 128, message = "哈希值长度无效"))]
     pub hash: String,
 }
 
@@ -55,20 +58,45 @@ pub struct FileListResponse {
     pub total_pages: u64,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Validate)]
 pub struct ListFilesQuery {
+    /// 文件路径（可选）
+    #[validate(length(max = 500, message = "路径长度不能超过500个字符"))]
     pub path: Option<String>,
+    
+    /// 页码，最小为1
+    #[validate(range(min = 1, message = "页码必须大于0"))]
     pub page: Option<u64>,
+    
+    /// 每页大小，1-100
+    #[validate(range(min = 1, max = 100, message = "每页大小必须在1-100之间"))]
     pub page_size: Option<u64>,
+    
+    /// 排序字段
+    #[validate(length(max = 50, message = "排序字段长度不能超过50个字符"))]
     pub sort_by: Option<String>,
+    
+    /// 排序方向
+    #[validate(length(max = 10, message = "排序方向长度无效"))]
     pub sort_order: Option<String>,
+    
+    /// 文件类型过滤
+    #[validate(length(max = 50, message = "文件类型长度不能超过50个字符"))]
     pub file_type: Option<String>,
+    
+    /// 搜索关键词
+    #[validate(length(max = 200, message = "搜索关键词长度不能超过200个字符"))]
     pub search: Option<String>,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Validate)]
 pub struct TriggerSyncRequest {
+    /// 同步路径（可选）
+    #[validate(length(max = 500, message = "路径长度不能超过500个字符"))]
     pub path: Option<String>,
+    
+    /// 任务类型（可选）
+    #[validate(length(max = 50, message = "任务类型长度不能超过50个字符"))]
     pub task_type: Option<String>,
 }
 
@@ -98,8 +126,10 @@ pub struct TaskListResponse {
 }
 
 /// 同步文件请求
-#[derive(Deserialize)]
+#[derive(Deserialize, Validate)]
 pub struct SyncFilesRequest {
+    /// 同步路径（可选）
+    #[validate(length(max = 500, message = "路径长度不能超过500个字符"))]
     pub path: Option<String>,
 }
 
@@ -109,4 +139,9 @@ pub struct SyncFilesResponse {
     pub success: bool,
     pub task_id: i64,
     pub message: String,
+}
+
+/// 验证排序方向是否有效
+pub fn is_valid_sort_order(order: &str) -> bool {
+    order == "asc" || order == "desc"
 }

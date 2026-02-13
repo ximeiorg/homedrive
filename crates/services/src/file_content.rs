@@ -41,6 +41,76 @@ pub struct ListMemberFilesParams {
 pub struct FileService;
 
 impl FileService {
+    /// 检查文件名是否安全
+    /// 防止路径遍历攻击
+    pub fn is_filename_safe(filename: &str) -> bool {
+        // 不允许空文件名
+        if filename.is_empty() {
+            return false;
+        }
+        
+        // 不允许路径遍历
+        if filename.contains("..") || filename.contains('/') || filename.contains('\\') {
+            return false;
+        }
+        
+        // 不允许空字节注入
+        if filename.contains('\0') {
+            return false;
+        }
+        
+        // 限制文件名长度
+        if filename.len() > 255 {
+            return false;
+        }
+        
+        true
+    }
+    
+    /// 清理文件名，移除不安全字符
+    pub fn sanitize_filename(filename: &str) -> String {
+        // 移除路径分隔符和危险字符
+        let sanitized: String = filename
+            .chars()
+            .filter(|c| !matches!(c, '/' | '\\' | '\0' | '<' | '>' | ':' | '"' | '|' | '?' | '*'))
+            .collect();
+        
+        // 限制长度
+        if sanitized.len() > 200 {
+            sanitized[..200].to_string()
+        } else if sanitized.is_empty() {
+            "unnamed_file".to_string()
+        } else {
+            sanitized
+        }
+    }
+    
+    /// 检查存储标签是否安全
+    pub fn is_storage_tag_safe(tag: &str) -> bool {
+        // 不允许空标签
+        if tag.is_empty() {
+            return false;
+        }
+        
+        // 不允许路径遍历
+        if tag.contains("..") || tag.contains('/') || tag.contains('\\') {
+            return false;
+        }
+        
+        // 不允许空字节注入
+        if tag.contains('\0') {
+            return false;
+        }
+        
+        // 限制长度
+        if tag.len() > 50 {
+            return false;
+        }
+        
+        // 只允许字母、数字、下划线和连字符
+        tag.chars().all(|c| c.is_alphanumeric() || c == '_' || c == '-')
+    }
+
     /// 计算文件内容的哈希值（使用 xxh3 算法）
     pub fn calculate_hash(data: &[u8]) -> String {
         use xxhash_rust::xxh3::xxh3_128;
@@ -87,12 +157,22 @@ impl FileService {
         use futures::StreamExt;
         use std::path::PathBuf;
 
+        // 验证存储标签安全性
+        if !Self::is_storage_tag_safe(storage_tag) {
+            tracing::warn!(storage_tag = %storage_tag, uploader_id = uploader_id, "Invalid storage tag rejected");
+            return Err(ServiceError::InvalidInput("Invalid storage tag".to_string()));
+        }
+        
+        // 清理文件名
+        let safe_filename = Self::sanitize_filename(&filename);
+        tracing::debug!(original_filename = %filename, safe_filename = %safe_filename, "Filename sanitized");
+
         // 生成临时存储路径（先写入临时位置，放在 storage_tag 目录下）
         let temp_key = format!(
             "{}/temp/{}_{}",
             storage_tag,
             Utc::now().timestamp_millis(),
-            filename
+            safe_filename
         );
         let temp_path = PathBuf::from(storage_root).join(&temp_key);
 
@@ -160,7 +240,7 @@ impl FileService {
             let member_file_data = store::member_file::mutation::CreateMemberFile {
                 member_id: uploader_id,
                 file_content_id: existing_id,
-                file_name: filename.clone(),
+                file_name: safe_filename.clone(),
                 description: String::new(),
             };
 
@@ -181,7 +261,7 @@ impl FileService {
             storage_tag,
             Utc::now().format("%Y/%m"),
             content_hash,
-            filename
+            safe_filename
         );
         let final_path = PathBuf::from(storage_root).join(&storage_key);
 
@@ -220,12 +300,14 @@ impl FileService {
         let member_file_data = store::member_file::mutation::CreateMemberFile {
             member_id: uploader_id,
             file_content_id,
-            file_name: filename.clone(),
+            file_name: safe_filename.clone(),
             description: String::new(),
         };
 
         store::member_file::mutation::Mutation::create(db, member_file_data).await?;
 
+        tracing::info!(file_id = file_content_id, uploader_id = uploader_id, file_size = file_size, "File uploaded successfully");
+        
         Ok((file_content_id, "File uploaded successfully".to_string()))
     }
 
@@ -239,12 +321,15 @@ impl FileService {
         filename: String,
         uploader_id: i64,
     ) -> Result<i64> {
+        // 清理文件名
+        let safe_filename = Self::sanitize_filename(&filename);
+        
         // 生成存储路径：files/年月/哈希/文件名
         let storage_key = format!(
             "files/{}/{}/{}",
             Utc::now().format("%Y/%m/%d"),
             content_hash,
-            filename
+            safe_filename
         );
 
         // 保存文件到存储

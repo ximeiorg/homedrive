@@ -24,6 +24,9 @@ pub enum AppError {
     #[error("invalid input: {0}")]
     InvalidInput(String),
 
+    #[error("validation error: {0}")]
+    ValidationError(String),
+
     // 系统内部错误 - 返回通用消息，记录详细错误
     #[error("database error")]
     DatabaseError,
@@ -45,6 +48,7 @@ impl AppError {
             Self::Forbidden => "forbidden".into(),
             Self::NotFound => "not found".into(),
             Self::InvalidInput(msg) => msg.clone(),
+            Self::ValidationError(msg) => msg.clone(),
             // 系统错误只返回通用消息
             Self::DatabaseError | Self::Unknown => {
                 tracing::error!(category = "system", "Internal server error");
@@ -73,7 +77,8 @@ impl AppError {
             | Self::MemberAlreadyExists
             | Self::InvalidCredentials
             | Self::Forbidden
-            | Self::NotFound => false,
+            | Self::NotFound
+            | Self::ValidationError(_) => false,
             // 系统错误需要记录
             Self::InvalidInput(_) => false, // 也可以设为 true，取决于需求
             Self::DatabaseError | Self::Unknown | Self::ServiceError(_) => true,
@@ -95,6 +100,7 @@ impl IntoResponse for AppError {
             Self::Forbidden => StatusCode::FORBIDDEN,
             Self::NotFound => StatusCode::NOT_FOUND,
             Self::InvalidInput(_) => StatusCode::BAD_REQUEST,
+            Self::ValidationError(_) => StatusCode::BAD_REQUEST,
 
             // 系统内部错误 - 返回 500
             Self::DatabaseError => {
@@ -137,5 +143,26 @@ impl IntoResponse for AppError {
         }));
 
         (status, body).into_response()
+    }
+}
+
+/// 从 validator 验证错误创建 AppError
+impl From<validator::ValidationErrors> for AppError {
+    fn from(errors: validator::ValidationErrors) -> Self {
+        let error_messages: Vec<String> = errors
+            .field_errors()
+            .into_iter()
+            .flat_map(|(field, errs)| {
+                errs.iter().map(move |e| {
+                    format!(
+                        "{}: {}",
+                        field,
+                        e.message.as_ref().map(|m| m.to_string()).unwrap_or_else(|| "invalid value".to_string())
+                    )
+                })
+            })
+            .collect();
+        
+        AppError::ValidationError(error_messages.join("; "))
     }
 }

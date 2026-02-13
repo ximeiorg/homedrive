@@ -37,3 +37,4 @@ urlencoding = "1.1"
 futures = "0.3"
 bytes = "1"
 xxhash-rust = { version = "0.8.15", features = ["xxh3"] }
+validator = { version = "0.20.0", features = ["derive"] }

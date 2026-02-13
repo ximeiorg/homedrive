@@ -1,7 +1,8 @@
 use crate::auth::Authorized;
 use crate::error::AppError;
+use crate::extract::{ValidatedJson, ValidatedQuery};
 use crate::state::AppState;
-use axum::{Json, extract::Path, extract::Query, extract::State, response::IntoResponse};
+use axum::{Json, extract::Path, extract::State, response::IntoResponse};
 use chrono::Utc;
 use futures::TryStreamExt;
 use sea_orm::QueryOrder;
@@ -16,18 +17,150 @@ use schema::file::{
     UploadFileResponse,
 };
 
+/// 允许上传的文件类型白名单
+const ALLOWED_MIME_TYPES: &[&str] = &[
+    // 图片
+    "image/jpeg",
+    "image/png",
+    "image/gif",
+    "image/webp",
+    "image/svg+xml",
+    "image/bmp",
+    "image/tiff",
+    // 视频
+    "video/mp4",
+    "video/mpeg",
+    "video/quicktime",
+    "video/x-msvideo",
+    "video/x-ms-wmv",
+    "video/webm",
+    // 音频
+    "audio/mpeg",
+    "audio/wav",
+    "audio/ogg",
+    "audio/aac",
+    "audio/flac",
+    // 文档
+    "application/pdf",
+    "application/msword",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "application/vnd.ms-excel",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "application/vnd.ms-powerpoint",
+    "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    "text/plain",
+    "text/csv",
+    "text/markdown",
+    // 压缩文件
+    "application/zip",
+    "application/x-rar-compressed",
+    "application/x-7z-compressed",
+    "application/x-tar",
+    "application/gzip",
+    // 其他
+    "application/json",
+    "application/xml",
+];
+
+/// 危险文件扩展名黑名单
+const DANGEROUS_EXTENSIONS: &[&str] = &[
+    "exe", "bat", "cmd", "com", "pif", "scr", "vbs", "js", "jar",
+    "msi", "dll", "sh", "bash", "zsh", "fish",
+    "php", "asp", "aspx", "jsp", "cgi", "pl", "py",
+    "html", "htm", "xhtml", "shtml",
+];
+
+/// 检查 MIME 类型是否在白名单中
+fn is_mime_type_allowed(mime_type: &str) -> bool {
+    // 允许所有以 image/, video/, audio/ 开头的类型
+    if mime_type.starts_with("image/") 
+        || mime_type.starts_with("video/") 
+        || mime_type.starts_with("audio/") {
+        return true;
+    }
+    
+    // 检查白名单
+    ALLOWED_MIME_TYPES.contains(&mime_type)
+}
+
+/// 检查文件扩展名是否危险
+fn is_dangerous_extension(filename: &str) -> bool {
+    let filename_lower = filename.to_lowercase();
+    for ext in DANGEROUS_EXTENSIONS {
+        if filename_lower.ends_with(&format!(".{}", ext)) {
+            return true;
+        }
+    }
+    false
+}
+
+/// 检查路径是否包含路径遍历攻击
+fn is_path_safe(path: &str) -> bool {
+    // 不允许空路径
+    if path.is_empty() {
+        return false;
+    }
+    
+    // 不允许路径遍历
+    if path.contains("..") {
+        return false;
+    }
+    
+    // 不允许绝对路径
+    if path.starts_with('/') {
+        return false;
+    }
+    
+    // 不允许 Windows 风格的绝对路径
+    if path.len() > 2 && path.chars().nth(1) == Some(':') {
+        return false;
+    }
+    
+    // 不允许空字节注入
+    if path.contains('\0') {
+        return false;
+    }
+    
+    true
+}
+
+/// 检查文件名是否安全
+fn is_filename_safe(filename: &str) -> bool {
+    // 不允许空文件名
+    if filename.is_empty() {
+        return false;
+    }
+    
+    // 不允许路径遍历
+    if filename.contains("..") || filename.contains('/') || filename.contains('\\') {
+        return false;
+    }
+    
+    // 不允许空字节注入
+    if filename.contains('\0') {
+        return false;
+    }
+    
+    // 限制文件名长度
+    if filename.len() > 255 {
+        return false;
+    }
+    
+    true
+}
+
 /// Check if a file hash already exists in the database
 pub async fn check_file_hash_exists(
     State(state): State<Arc<AppState>>,
-    Query(query): Query<HashCheckQuery>,
-) -> Json<HashCheckResponse> {
+    ValidatedQuery(query): ValidatedQuery<HashCheckQuery>,
+) -> crate::error::Result<Json<HashCheckResponse>> {
     let db = &state.conn;
 
     let exists = services::FileService::check_hash_exists(db, &query.hash)
         .await
         .unwrap_or(false);
 
-    Json(HashCheckResponse { exists })
+    Ok(Json(HashCheckResponse { exists }))
 }
 
 /// Upload file handler with streaming support for large files - requires authentication
@@ -40,33 +173,34 @@ pub async fn upload_file(
     State(state): State<Arc<AppState>>,
     auth: Authorized,
     mut multipart: axum::extract::Multipart,
-) -> Json<UploadFileResponse> {
+) -> crate::error::Result<Json<UploadFileResponse>> {
     let db = &state.conn;
     let uploader_id = auth.0;
     let storage_root = state.config.storage.volume.clone();
 
-    tracing::info!("Upload request received from user {}", uploader_id);
+    tracing::info!(user_id = uploader_id, "Upload request received");
 
     // 获取用户的 storage_tag
     let user = match store::member::query::Query::find_by_id(db, uploader_id).await {
         Ok(Some(user)) => user,
         Ok(None) => {
-            return Json(UploadFileResponse {
+            return Ok(Json(UploadFileResponse {
                 success: false,
                 file_id: 0,
                 message: "User not found".to_string(),
-            });
+            }));
         }
         Err(e) => {
-            return Json(UploadFileResponse {
+            tracing::error!(error = ?e, "Database error while finding user");
+            return Ok(Json(UploadFileResponse {
                 success: false,
                 file_id: 0,
-                message: format!("Database error: {e}"),
-            });
+                message: "Database error".to_string(),
+            }));
         }
     };
     let storage_tag = user.storage_tag;
-    tracing::info!("User storage_tag: {}", storage_tag);
+    tracing::debug!(user_id = uploader_id, storage_tag = %storage_tag, "User storage_tag resolved");
 
     // 遍历 multipart 字段，找到文件
     loop {
@@ -75,17 +209,53 @@ pub async fn upload_file(
         match field_result {
             Ok(Some(field)) => {
                 let field_name = field.name().unwrap_or("").to_string();
-                tracing::info!("Received multipart field: {}", field_name);
+                tracing::debug!(field_name = %field_name, "Received multipart field");
 
                 if field_name == "file" {
                     // 找到文件字段，处理文件上传
                     let filename = field.file_name().unwrap_or("unknown").to_string();
+                    
+                    // 验证文件名安全性
+                    if !is_filename_safe(&filename) {
+                        tracing::warn!(filename = %filename, "Invalid filename rejected");
+                        return Ok(Json(UploadFileResponse {
+                            success: false,
+                            file_id: 0,
+                            message: "Invalid filename".to_string(),
+                        }));
+                    }
+                    
+                    // 检查危险扩展名
+                    if is_dangerous_extension(&filename) {
+                        tracing::warn!(filename = %filename, user_id = uploader_id, "Dangerous file extension rejected");
+                        return Ok(Json(UploadFileResponse {
+                            success: false,
+                            file_id: 0,
+                            message: "File type not allowed for security reasons".to_string(),
+                        }));
+                    }
+                    
                     let content_type = field
                         .content_type()
                         .unwrap_or("application/octet-stream")
                         .to_string();
 
-                    tracing::info!("Processing file upload: {} ({})", filename, content_type);
+                    // 检查 MIME 类型白名单
+                    if !is_mime_type_allowed(&content_type) {
+                        tracing::warn!(
+                            filename = %filename,
+                            content_type = %content_type,
+                            user_id = uploader_id,
+                            "MIME type not in whitelist"
+                        );
+                        return Ok(Json(UploadFileResponse {
+                            success: false,
+                            file_id: 0,
+                            message: "File type not allowed".to_string(),
+                        }));
+                    }
+
+                    tracing::info!(filename = %filename, content_type = %content_type, "Processing file upload");
 
                     // 将 field 转换为流
                     let stream = field.map_err(std::io::Error::other);
@@ -103,45 +273,45 @@ pub async fn upload_file(
                     .await
                     {
                         Ok((file_id, message)) => {
-                            tracing::info!("File uploaded successfully: file_id={}", file_id);
-                            return Json(UploadFileResponse {
+                            tracing::info!(file_id = file_id, user_id = uploader_id, "File uploaded successfully");
+                            return Ok(Json(UploadFileResponse {
                                 success: true,
                                 file_id,
                                 message,
-                            });
+                            }));
                         }
                         Err(e) => {
-                            tracing::error!("File upload failed: {}", e);
-                            return Json(UploadFileResponse {
+                            tracing::error!(error = ?e, user_id = uploader_id, "File upload failed");
+                            return Ok(Json(UploadFileResponse {
                                 success: false,
                                 file_id: 0,
-                                message: e.to_string(),
-                            });
+                                message: "Upload failed".to_string(),
+                            }));
                         }
                     }
                 }
             }
             Ok(None) => {
-                tracing::warn!("No more multipart fields");
+                tracing::debug!("No more multipart fields");
                 break;
             }
             Err(e) => {
-                tracing::error!("Error parsing multipart field: {}", e);
-                return Json(UploadFileResponse {
+                tracing::error!(error = ?e, "Error parsing multipart field");
+                return Ok(Json(UploadFileResponse {
                     success: false,
                     file_id: 0,
-                    message: format!("Error parsing multipart request: {e}"),
-                });
+                    message: "Error parsing request".to_string(),
+                }));
             }
         }
     }
 
-    tracing::warn!("No file provided in upload request");
-    Json(UploadFileResponse {
+    tracing::warn!(user_id = uploader_id, "No file provided in upload request");
+    Ok(Json(UploadFileResponse {
         success: false,
         file_id: 0,
         message: "No file provided".to_string(),
-    })
+    }))
 }
 
 /// Parse Range header into (start, end) byte positions
@@ -177,6 +347,19 @@ pub async fn serve_file(
 ) -> impl IntoResponse {
     let db = &state.conn;
     let user_id = auth.0;
+    
+    // 验证 storage_tag 安全性
+    if !is_path_safe(&storage_tag) {
+        tracing::warn!(user_id = user_id, storage_tag = %storage_tag, "Invalid storage_tag rejected");
+        return Err(AppError::InvalidInput("Invalid storage tag".to_string()));
+    }
+    
+    // 验证 file_path 安全性
+    if !is_path_safe(&file_path) {
+        tracing::warn!(user_id = user_id, file_path = %file_path, "Invalid file_path rejected");
+        return Err(AppError::InvalidInput("Invalid file path".to_string()));
+    }
+    
     // Get user's storage_tag from database
     let user = match store::member::query::Query::find_by_id(db, user_id).await {
         Ok(Some(m)) => m,
@@ -186,6 +369,12 @@ pub async fn serve_file(
 
     // Verify the requested storage_tag matches the user's storage_tag
     if storage_tag != user.storage_tag {
+        tracing::warn!(
+            user_id = user_id,
+            requested_storage_tag = %storage_tag,
+            user_storage_tag = %user.storage_tag,
+            "Storage tag mismatch - potential unauthorized access attempt"
+        );
         return Err(AppError::Forbidden);
     }
 
@@ -196,16 +385,37 @@ pub async fn serve_file(
     // LocalStorage uses: root/{storage_tag}/{file_path}
     // storage_path already contains: storage_tag/file_path
     let mut file_path_buf = PathBuf::from(storage_root);
-    file_path_buf.push(storage_tag);
+    file_path_buf.push(&storage_tag);
     file_path_buf.push(&file_path);
 
+    // 规范化路径并检查是否仍在允许的目录内
+    let canonical_path = match file_path_buf.canonicalize() {
+        Ok(p) => p,
+        Err(_) => return Err(AppError::NotFound),
+    };
+    
+    let canonical_root = match PathBuf::from(storage_root).canonicalize() {
+        Ok(p) => p,
+        Err(_) => return Err(AppError::NotFound),
+    };
+    
+    // 确保解析后的路径仍在存储根目录内
+    if !canonical_path.starts_with(&canonical_root) {
+        tracing::warn!(
+            user_id = user_id,
+            attempted_path = ?canonical_path,
+            "Path traversal attempt detected"
+        );
+        return Err(AppError::Forbidden);
+    }
+
     // Check if file exists
-    if !file_path_buf.exists() {
+    if !canonical_path.exists() {
         return Err(AppError::NotFound);
     }
 
     // Get file metadata
-    let metadata = match tokio::fs::metadata(&file_path_buf).await {
+    let metadata = match tokio::fs::metadata(&canonical_path).await {
         Ok(m) => m,
         Err(_) => return Err(AppError::NotFound),
     };
@@ -215,7 +425,7 @@ pub async fn serve_file(
     }
 
     let file_size = metadata.len();
-    let content_type = mime_guess::from_path(&file_path_buf)
+    let content_type = mime_guess::from_path(&canonical_path)
         .first()
         .map(|m| m.to_string())
         .unwrap_or_else(|| "application/octet-stream".to_string());
@@ -230,7 +440,7 @@ pub async fn serve_file(
             let content_length = end - start + 1;
 
             // Open file for streaming
-            let file = match File::open(&file_path_buf).await {
+            let file = match File::open(&canonical_path).await {
                 Ok(f) => f,
                 Err(_) => return Err(AppError::NotFound),
             };
@@ -254,7 +464,7 @@ pub async fn serve_file(
             )
         } else {
             // Invalid range, return full file
-            let file = match File::open(&file_path_buf).await {
+            let file = match File::open(&canonical_path).await {
                 Ok(f) => f,
                 Err(_) => return Err(AppError::NotFound),
             };
@@ -271,7 +481,7 @@ pub async fn serve_file(
         }
     } else {
         // No Range header, return full file
-        let file = match File::open(&file_path_buf).await {
+        let file = match File::open(&canonical_path).await {
             Ok(f) => f,
             Err(_) => return Err(AppError::NotFound),
         };
@@ -303,8 +513,8 @@ pub async fn serve_file(
 pub async fn list_files(
     State(state): State<Arc<AppState>>,
     Authorized(member_id): Authorized,
-    Query(query): Query<ListFilesQuery>,
-) -> Json<schema::file::FileListResponse> {
+    ValidatedQuery(query): ValidatedQuery<ListFilesQuery>,
+) -> crate::error::Result<Json<schema::file::FileListResponse>> {
     use schema::file::FileListItem;
 
     // 通过 services 层查询文件列表
@@ -375,25 +585,35 @@ pub async fn list_files(
     let page_size = query.page_size.unwrap_or(100);
     let total_pages = (total as f64 / page_size as f64).ceil() as u64;
 
-    Json(schema::file::FileListResponse {
+    Ok(Json(schema::file::FileListResponse {
         files,
         total,
         page,
         page_size,
         total_pages,
-    })
+    }))
 }
 
 /// 触发同步任务 - 需要认证
 pub async fn trigger_sync_files(
     State(state): State<Arc<AppState>>,
     Authorized(member_id): Authorized,
-    Json(req): Json<TriggerSyncRequest>,
-) -> Json<TriggerSyncResponse> {
+    ValidatedJson(req): ValidatedJson<TriggerSyncRequest>,
+) -> crate::error::Result<Json<TriggerSyncResponse>> {
     // 确定路径和任务类型
     let path = req
         .path
         .unwrap_or_else(|| state.config.storage.volume.clone());
+    
+    // 验证路径安全性
+    if !is_path_safe(&path) {
+        tracing::warn!(user_id = member_id, path = %path, "Invalid sync path rejected");
+        return Ok(Json(TriggerSyncResponse {
+            success: false,
+            message: "Invalid path".to_string(),
+        }));
+    }
+    
     let task_type = req.task_type.as_deref().unwrap_or("sync_files");
 
     // 创建任务负载
@@ -410,14 +630,17 @@ pub async fn trigger_sync_files(
     };
 
     match state.sync_task_sender.send(payload).await {
-        Ok(()) => Json(TriggerSyncResponse {
+        Ok(()) => Ok(Json(TriggerSyncResponse {
             success: true,
             message: "Task queued successfully".to_string(),
-        }),
-        Err(e) => Json(TriggerSyncResponse {
-            success: false,
-            message: format!("Failed to queue task: {e}"),
-        }),
+        })),
+        Err(e) => {
+            tracing::error!(error = ?e, user_id = member_id, "Failed to queue task");
+            Ok(Json(TriggerSyncResponse {
+                success: false,
+                message: "Failed to queue task".to_string(),
+            }))
+        }
     }
 }
 
@@ -519,20 +742,30 @@ pub async fn get_task(
 pub async fn sync_files(
     State(state): State<Arc<AppState>>,
     Authorized(member_id): Authorized,
-    Json(req): Json<SyncFilesRequest>,
-) -> Json<SyncFilesResponse> {
+    ValidatedJson(req): ValidatedJson<SyncFilesRequest>,
+) -> crate::error::Result<Json<SyncFilesResponse>> {
     use sea_orm::{ActiveModelTrait, Set};
     use store::entity::task_messages::TaskStatus;
-    use tracing::error;
 
     let db = &state.conn;
     let storage_root = state.config.storage.volume.clone();
+    
+    // 获取路径并验证安全性
+    let sync_path = req.path.unwrap_or_else(|| storage_root.clone());
+    if !is_path_safe(&sync_path) {
+        tracing::warn!(user_id = member_id, path = %sync_path, "Invalid sync path rejected");
+        return Ok(Json(SyncFilesResponse {
+            success: false,
+            task_id: 0,
+            message: "Invalid path".to_string(),
+        }));
+    }
 
     // 创建任务负载
     let payload = services::TaskPayload {
         task_type: "sync_files".to_string(),
         member_id,
-        path: req.path.unwrap_or_else(|| storage_root.clone()),
+        path: sync_path,
         options: Some(services::TaskOptions {
             recursive: Some(true),
             file_types: None,
@@ -570,28 +803,28 @@ pub async fn sync_files(
             payload.task_message_id = Some(task.id);
 
             match state.sync_task_sender.send(payload).await {
-                Ok(()) => Json(SyncFilesResponse {
+                Ok(()) => Ok(Json(SyncFilesResponse {
                     success: true,
                     task_id: task.id,
                     message: "同步任务已创建".to_string(),
-                }),
+                })),
                 Err(e) => {
-                    error!("任务已创建但发送到队列失败: {}", e);
-                    Json(SyncFilesResponse {
+                    tracing::error!(error = ?e, task_id = task.id, "Task created but failed to send to queue");
+                    Ok(Json(SyncFilesResponse {
                         success: false,
                         task_id: task.id,
                         message: "任务已创建但发送到队列失败".to_string(),
-                    })
+                    }))
                 }
             }
         }
         Err(e) => {
-            error!("创建同步任务失败: {}", e);
-            Json(SyncFilesResponse {
+            tracing::error!(error = ?e, user_id = member_id, "Failed to create sync task");
+            Ok(Json(SyncFilesResponse {
                 success: false,
                 task_id: 0,
                 message: "创建同步任务失败".to_string(),
-            })
+            }))
         }
     }
 }

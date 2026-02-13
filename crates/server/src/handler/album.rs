@@ -1,7 +1,8 @@
 use crate::auth::Authorized;
 use crate::error::AppError;
+use crate::extract::{ValidatedJson, ValidatedQuery};
 use crate::state::AppState;
-use axum::{Json, extract::Path, extract::Query, extract::State};
+use axum::{Json, extract::Path, extract::State};
 use std::sync::Arc;
 
 use schema::album::{
@@ -16,20 +17,23 @@ pub async fn create_album(
     State(state): State<Arc<AppState>>,
     auth: Authorized,
     Path(member_id): Path<i64>,
-    Json(request): Json<CreateAlbumRequest>,
+    ValidatedJson(request): ValidatedJson<CreateAlbumRequest>,
 ) -> Result<Json<AlbumResponse>, AppError> {
     // 验证用户只能为自己创建相册
     if auth.0 != member_id {
         return Err(AppError::Forbidden);
     }
 
-
     // 如果没有封面文件 ID，则使用第一个文件 ID 作为封面
     let first = request.file_ids.clone().and_then(|v| v.first().cloned());
     let cover_file_id = request.cover_file_id.or(first);
 
-    dbg!(cover_file_id);
-    dbg!(&request.file_ids);
+    tracing::debug!(
+        member_id = member_id,
+        cover_file_id = ?cover_file_id,
+        file_count = ?request.file_ids.as_ref().map(|v| v.len()),
+        "Creating album"
+    );
 
     let params = services::CreateAlbumParams {
         name: request.name,
@@ -58,7 +62,7 @@ pub async fn list_albums(
     State(state): State<Arc<AppState>>,
     auth: Authorized,
     Path(member_id): Path<i64>,
-    Query(query): Query<PaginationQuery>,
+    ValidatedQuery(query): ValidatedQuery<PaginationQuery>,
 ) -> Result<Json<AlbumListResponse>, AppError> {
     // 验证用户只能查看自己的相册
     if auth.0 != member_id {
@@ -147,7 +151,7 @@ pub async fn update_album(
     State(state): State<Arc<AppState>>,
     auth: Authorized,
     Path((member_id, album_id)): Path<(i64, i64)>,
-    Json(request): Json<UpdateAlbumRequest>,
+    ValidatedJson(request): ValidatedJson<UpdateAlbumRequest>,
 ) -> Result<Json<AlbumResponse>, AppError> {
     // 验证用户权限
     if auth.0 != member_id {
@@ -200,7 +204,7 @@ pub async fn list_album_files(
     State(state): State<Arc<AppState>>,
     auth: Authorized,
     Path((member_id, album_id)): Path<(i64, i64)>,
-    Query(query): Query<PaginationQuery>,
+    ValidatedQuery(query): ValidatedQuery<PaginationQuery>,
 ) -> Result<Json<AlbumFilesResponse>, AppError> {
     // 验证用户权限
     if auth.0 != member_id {
@@ -278,7 +282,7 @@ pub async fn add_files_to_album(
     State(state): State<Arc<AppState>>,
     auth: Authorized,
     Path((member_id, album_id)): Path<(i64, i64)>,
-    Json(request): Json<AddFilesRequest>,
+    ValidatedJson(request): ValidatedJson<AddFilesRequest>,
 ) -> Result<Json<AddFilesResponse>, AppError> {
     // 验证用户权限
     if auth.0 != member_id {
@@ -302,7 +306,7 @@ pub async fn remove_files_from_album(
     State(state): State<Arc<AppState>>,
     auth: Authorized,
     Path((member_id, album_id)): Path<(i64, i64)>,
-    Json(request): Json<RemoveFilesRequest>,
+    ValidatedJson(request): ValidatedJson<RemoveFilesRequest>,
 ) -> Result<Json<RemoveFilesResponse>, AppError> {
     // 验证用户权限
     if auth.0 != member_id {

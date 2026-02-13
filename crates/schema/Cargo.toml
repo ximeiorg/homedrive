@@ -7,3 +7,4 @@ license = "MIT"
 [dependencies]
 serde = {workspace = true }
 chrono = { version = "0.4", features = ["serde"] }
+validator = { version = "0.20.0", features = ["derive"] }

@@ -1,6 +1,7 @@
 pub mod auth;
 pub mod config;
 pub mod error;
+pub mod extract;
 pub mod handler;
 pub mod render;
 pub mod route;

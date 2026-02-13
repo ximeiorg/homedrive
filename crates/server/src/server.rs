@@ -1,8 +1,7 @@
 use std::net::SocketAddr;
 use std::sync::Arc;
 
-use axum::{Router, http::Method, http::StatusCode, response::IntoResponse};
-use tower_http::cors::{Any, CorsLayer};
+use axum::{Router, http::StatusCode, response::IntoResponse};
 use tracing::info;
 
 use crate::{config::AppConfig, route::routes, state::AppState};
@@ -34,7 +33,7 @@ pub async fn start() {
     // 加载配置
     let config = AppConfig::load().expect("Failed to load configuration");
 
-    println!("{:?}", &config);
+    tracing::info!(port = config.server.port, host = %config.server.host, "Configuration loaded");
 
     // 获取 JWT 密钥
     let jwt_secret = config.jwt_secret();
@@ -81,16 +80,10 @@ pub async fn start() {
         sync_task_sender: Arc::new(services::TaskSender::new(task_sender)),
     });
 
-    // CORS 配置
-    let cors_layer = CorsLayer::new()
-        .allow_origin(Any)
-        .allow_methods([Method::GET, Method::POST, Method::PUT, Method::DELETE])
-        .allow_headers(Any);
-
+    // 使用配置化的 CORS（在 routes 函数中处理）
     let app = Router::new()
-        .nest("/api", routes())
-        .layer(cors_layer)
-        .with_state(shared_state)
+        .nest("/api", routes(&shared_state))
+        .with_state(shared_state.clone())
         .fallback(index_handler);
 
     // 获取端口（优先使用环境变量）
