@@ -5,8 +5,9 @@ const FILES_API = `${API_BASE_URL}/api/files`;
 const TASKS_API = `${API_BASE_URL}/api/tasks`;
 const SYSTEM_API = `${API_BASE_URL}/api/system`;
 const AUTH_API = `${API_BASE_URL}/api/auth`;
+const ALBUMS_API = `${API_BASE_URL}/api/members`;
 
-export { FILES_API, TASKS_API, SYSTEM_API, AUTH_API };
+export { FILES_API, TASKS_API, SYSTEM_API, AUTH_API, ALBUMS_API };
 
 export interface IsEmptyResponse {
   is_empty: boolean;
@@ -61,10 +62,22 @@ export async function authFetch(
     (headers as Record<string, string>)["Authorization"] = `Bearer ${token}`;
   }
   
-  return fetch(url, {
+  const response = await fetch(url, {
     ...options,
     headers,
   });
+  
+  // 处理 401 未授权响应 - 清除本地存储并跳转到登录页面
+  if (response.status === 401) {
+    localStorage.removeItem("token");
+    localStorage.removeItem("member");
+    // 使用 window.location.href 进行硬跳转，确保完全重置应用状态
+    if (typeof window !== "undefined") {
+      window.location.href = "/login";
+    }
+  }
+  
+  return response;
 }
 
 // 检查 member 表是否为空（公开接口）
@@ -306,6 +319,218 @@ export async function getSystemStats(): Promise<SystemStats> {
   const response = await fetch(`${SYSTEM_API}/stats`);
   if (!response.ok) {
     throw new Error("Failed to get system stats");
+  }
+  return response.json();
+}
+
+// ==================== 相册相关类型和 API ====================
+
+// 相册响应类型
+export interface AlbumResponse {
+  id: number;
+  member_id: number;
+  name: string;
+  description: string | null;
+  cover_file_id: number | null;
+  file_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
+// 相册列表项类型
+export interface AlbumListItem {
+  id: number;
+  name: string;
+  description: string | null;
+  cover_file_id: number | null;
+  cover_url: string | null;
+  file_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
+// 相册列表响应类型
+export interface AlbumListResponse {
+  albums: AlbumListItem[];
+  total: number;
+  page: number;
+  page_size: number;
+}
+
+// 相册文件信息类型
+export interface AlbumFileInfo {
+  id: number;
+  file_name: string;
+  file_size: number;
+  mime_type: string;
+  description: string;
+  thumbnail: string | null;
+  url: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+// 相册文件列表响应类型
+export interface AlbumFilesResponse {
+  files: AlbumFileInfo[];
+  total: number;
+  page: number;
+  page_size: number;
+}
+
+// 创建相册请求类型
+export interface CreateAlbumRequest {
+  name: string;
+  description?: string;
+  cover_file_id?: number;
+  file_ids?: number[];
+}
+
+// 更新相册请求类型
+export interface UpdateAlbumRequest {
+  name?: string;
+  description?: string;
+  cover_file_id?: number;
+}
+
+// 添加文件到相册请求类型
+export interface AddFilesRequest {
+  file_ids: number[];
+}
+
+// 添加文件响应类型
+export interface AddFilesResponse {
+  added_count: number;
+}
+
+// 移除文件响应类型
+export interface RemoveFilesResponse {
+  removed_count: number;
+}
+
+// 通用消息响应类型
+export interface MessageResponse {
+  message: string;
+}
+
+// 获取相册列表
+export async function getAlbumList(memberId: number, params?: {
+  page?: number;
+  pageSize?: number;
+}): Promise<AlbumListResponse> {
+  const searchParams = new URLSearchParams();
+  if (params?.page) {
+    searchParams.set("page", params.page.toString());
+  }
+  if (params?.pageSize) {
+    searchParams.set("page_size", params.pageSize.toString());
+  }
+  
+  const url = `${ALBUMS_API}/${memberId}/albums${searchParams.toString() ? `?${searchParams.toString()}` : ""}`;
+  const response = await authFetch(url);
+  if (!response.ok) {
+    throw new Error("Failed to get album list");
+  }
+  return response.json();
+}
+
+// 创建相册
+export async function createAlbum(memberId: number, data: CreateAlbumRequest): Promise<AlbumResponse> {
+  const response = await authFetch(`${ALBUMS_API}/${memberId}/albums`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(data),
+  });
+  if (!response.ok) {
+    throw new Error("Failed to create album");
+  }
+  return response.json();
+}
+
+// 获取相册详情
+export async function getAlbum(memberId: number, albumId: number): Promise<AlbumResponse> {
+  const response = await authFetch(`${ALBUMS_API}/${memberId}/albums/${albumId}`);
+  if (!response.ok) {
+    throw new Error("Failed to get album");
+  }
+  return response.json();
+}
+
+// 更新相册
+export async function updateAlbum(memberId: number, albumId: number, data: UpdateAlbumRequest): Promise<AlbumResponse> {
+  const response = await authFetch(`${ALBUMS_API}/${memberId}/albums/${albumId}`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(data),
+  });
+  if (!response.ok) {
+    throw new Error("Failed to update album");
+  }
+  return response.json();
+}
+
+// 删除相册
+export async function deleteAlbum(memberId: number, albumId: number): Promise<MessageResponse> {
+  const response = await authFetch(`${ALBUMS_API}/${memberId}/albums/${albumId}`, {
+    method: "DELETE",
+  });
+  if (!response.ok) {
+    throw new Error("Failed to delete album");
+  }
+  return response.json();
+}
+
+// 获取相册中的文件列表
+export async function getAlbumFiles(memberId: number, albumId: number, params?: {
+  page?: number;
+  pageSize?: number;
+}): Promise<AlbumFilesResponse> {
+  const searchParams = new URLSearchParams();
+  if (params?.page) {
+    searchParams.set("page", params.page.toString());
+  }
+  if (params?.pageSize) {
+    searchParams.set("page_size", params.pageSize.toString());
+  }
+  
+  const url = `${ALBUMS_API}/${memberId}/albums/${albumId}/files${searchParams.toString() ? `?${searchParams.toString()}` : ""}`;
+  const response = await authFetch(url);
+  if (!response.ok) {
+    throw new Error("Failed to get album files");
+  }
+  return response.json();
+}
+
+// 添加文件到相册
+export async function addFilesToAlbum(memberId: number, albumId: number, fileIds: number[]): Promise<AddFilesResponse> {
+  const response = await authFetch(`${ALBUMS_API}/${memberId}/albums/${albumId}/files`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ file_ids: fileIds }),
+  });
+  if (!response.ok) {
+    throw new Error("Failed to add files to album");
+  }
+  return response.json();
+}
+
+// 从相册中移除文件
+export async function removeFilesFromAlbum(memberId: number, albumId: number, fileIds: number[]): Promise<RemoveFilesResponse> {
+  const response = await authFetch(`${ALBUMS_API}/${memberId}/albums/${albumId}/files`, {
+    method: "DELETE",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ file_ids: fileIds }),
+  });
+  if (!response.ok) {
+    throw new Error("Failed to remove files from album");
   }
   return response.json();
 }

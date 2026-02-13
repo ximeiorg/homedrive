@@ -291,9 +291,10 @@ export function MobileMenuModal({ isOpen, onClose, selectedKey }: MobileMenuModa
       className="md:hidden m-0"
       motionProps={{
         variants: {
-          enter: { y: "-100%", opacity: 1 },
+          enter: { y: 0, opacity: 1 },
           exit: { y: "-100%", opacity: 0 },
         },
+        initial: { y: "-100%", opacity: 0 },
       }}
     >
       <ModalContent className="m-0 max-w-none rounded-b-xl">
