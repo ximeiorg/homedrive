@@ -22,9 +22,10 @@ import {
   ModalFooter,
   useDisclosure,
 } from "@heroui/react";
-import { Settings, Clock, Trash2, User } from "lucide-react";
+import { Settings, Clock, Trash2, User, Info } from "lucide-react";
 import { useMediaQuery } from "~/hooks/useMediaQuery";
 import { useAuth } from "../auth-context";
+import { useTheme, type Theme } from "../theme-context";
 import { getTaskList, syncFiles, type TaskItem, type TaskStatus, getMemberList, type MemberResponse, getSystemStats, type SystemStats } from "../api";
 import { TopBar } from "../components/TopBar";
 
@@ -208,13 +209,47 @@ const formatBytes = (bytes: number) => {
   return `${(bytes / 1024).toFixed(2)} KB`;
 };
 
-const settings = {
-  maxFileSize: 1024,
+// 本地设置类型
+interface LocalSettings {
+  theme: "dark" | "light" | "system";
+  language: string;
+  allowPublicSharing: boolean;
+  autoBackup: boolean;
+  backupFrequency: string;
+  notifications: boolean;
+  twoFactorAuth: boolean;
+}
+
+// 从 localStorage 加载设置
+function loadLocalSettings(): LocalSettings {
+  if (typeof window === "undefined") {
+    return defaultSettings;
+  }
+  
+  const stored = localStorage.getItem("userSettings");
+  if (stored) {
+    try {
+      return { ...defaultSettings, ...JSON.parse(stored) };
+    } catch {
+      return defaultSettings;
+    }
+  }
+  return defaultSettings;
+}
+
+// 保存设置到 localStorage
+function saveLocalSettings(settings: LocalSettings) {
+  if (typeof window === "undefined") return;
+  localStorage.setItem("userSettings", JSON.stringify(settings));
+}
+
+// 默认设置
+const defaultSettings: LocalSettings = {
+  theme: "dark",
+  language: "zh-CN",
   allowPublicSharing: true,
   autoBackup: true,
   backupFrequency: "daily",
-  theme: "dark" as const,
-  language: "zh-CN",
   notifications: true,
   twoFactorAuth: false,
 };
@@ -385,6 +420,7 @@ export default function SettingsPage() {
   const [currentTab, setCurrentTab] = useState("overview");
   const isMobile = useMediaQuery("(max-width: 768px)");
   const { isAuthenticated, member } = useAuth();
+  const { setTheme } = useTheme();
   const navigate = useNavigate();
   const { isOpen, onOpen, onClose } = useDisclosure();
   const [syncPath, setSyncPath] = useState("");
@@ -395,6 +431,25 @@ export default function SettingsPage() {
   const [members, setMembers] = useState<MemberResponse[]>([]);
   const [isLoadingMembers, setIsLoadingMembers] = useState(false);
   const [serverStats, setServerStats] = useState<SystemStats | null>(null);
+  
+  // 本地设置状态
+  const [localSettings, setLocalSettings] = useState<LocalSettings>(() => {
+    const saved = loadLocalSettings();
+    // 确保主题与主题上下文同步
+    return { ...saved, theme: saved.theme };
+  });
+  
+  // 保存设置到本地存储
+  const handleSettingsChange = (key: keyof LocalSettings, value: LocalSettings[keyof LocalSettings]) => {
+    const newSettings = { ...localSettings, [key]: value };
+    setLocalSettings(newSettings);
+    saveLocalSettings(newSettings);
+    
+    // 如果是主题设置，同时更新主题上下文
+    if (key === 'theme') {
+      setTheme(value as Theme);
+    }
+  };
 
   // 客户端登录检查
   useEffect(() => {
@@ -1053,23 +1108,13 @@ export default function SettingsPage() {
                 </Card>
 
                 <Card className="border-none shadow-md">
-                  <CardHeader>
-                    <h2 className="text-base md:text-lg font-semibold">通知设置</h2>
-                  </CardHeader>
-                  <CardBody className="space-y-4">
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <CardBody>
+                    <div className="flex items-center gap-3">
+                      <Info className="w-5 h-5 text-primary" />
                       <div>
-                        <p className="font-medium text-sm md:text-base">文件上传通知</p>
-                        <p className="text-xs text-default-500">文件上传完成时发送通知</p>
+                        <p className="font-medium text-sm md:text-base">本地保存</p>
+                        <p className="text-xs text-default-500">所有设置和偏好均保存在本地设备上</p>
                       </div>
-                      <Switch defaultSelected />
-                    </div>
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                      <div>
-                        <p className="font-medium text-sm md:text-base">分享通知</p>
-                        <p className="text-xs text-default-500">收到文件分享时发送通知</p>
-                      </div>
-                      <Switch defaultSelected />
                     </div>
                   </CardBody>
                 </Card>
@@ -1085,6 +1130,7 @@ export default function SettingsPage() {
                 <span className="hidden sm:inline">配置</span>
               </div>
             }
+            isDisabled
           >
             <div className="mt-4 md:mt-6 grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-6">
               {/* 左侧：常规设置 */}
@@ -1100,7 +1146,11 @@ export default function SettingsPage() {
                     </div>
                     <Select
                       size="sm"
-                      defaultSelectedKeys={[settings.theme]}
+                      selectedKeys={[localSettings.theme]}
+                      onSelectionChange={(keys) => {
+                        const selected = Array.from(keys)[0] as LocalSettings['theme'];
+                        handleSettingsChange('theme', selected);
+                      }}
                       className="sm:w-32"
                     >
                       <SelectItem key="dark">深色</SelectItem>
@@ -1116,7 +1166,11 @@ export default function SettingsPage() {
                     </div>
                     <Select
                       size="sm"
-                      defaultSelectedKeys={[settings.language]}
+                      selectedKeys={[localSettings.language]}
+                      onSelectionChange={(keys) => {
+                        const selected = Array.from(keys)[0] as string;
+                        handleSettingsChange('language', selected);
+                      }}
                       className="sm:w-32"
                     >
                       <SelectItem key="zh-CN">中文</SelectItem>
@@ -1139,7 +1193,10 @@ export default function SettingsPage() {
                         <p className="font-medium text-sm md:text-base">允许公开分享</p>
                         <p className="text-xs md:text-sm text-default-500">允许生成分享链接</p>
                       </div>
-                      <Switch defaultSelected={settings.allowPublicSharing} />
+                      <Switch 
+                        isSelected={localSettings.allowPublicSharing} 
+                        onValueChange={(val) => handleSettingsChange('allowPublicSharing', val)} 
+                      />
                     </div>
 
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -1147,7 +1204,10 @@ export default function SettingsPage() {
                         <p className="font-medium text-sm md:text-base">自动备份</p>
                         <p className="text-xs md:text-sm text-default-500">自动备份文件到云端</p>
                       </div>
-                      <Switch defaultSelected={settings.autoBackup} />
+                      <Switch 
+                        isSelected={localSettings.autoBackup} 
+                        onValueChange={(val) => handleSettingsChange('autoBackup', val)} 
+                      />
                     </div>
 
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -1157,7 +1217,11 @@ export default function SettingsPage() {
                       </div>
                       <Select
                         size="sm"
-                        defaultSelectedKeys={[settings.backupFrequency]}
+                        selectedKeys={[localSettings.backupFrequency]}
+                        onSelectionChange={(keys) => {
+                          const selected = Array.from(keys)[0] as string;
+                          handleSettingsChange('backupFrequency', selected);
+                        }}
                         className="sm:w-32"
                       >
                         <SelectItem key="hourly">每小时</SelectItem>
@@ -1180,7 +1244,10 @@ export default function SettingsPage() {
                         <p className="font-medium text-sm md:text-base">消息通知</p>
                         <p className="text-xs md:text-sm text-default-500">接收系统消息通知</p>
                       </div>
-                      <Switch defaultSelected={settings.notifications} />
+                      <Switch 
+                        isSelected={localSettings.notifications} 
+                        onValueChange={(val) => handleSettingsChange('notifications', val)} 
+                      />
                     </div>
 
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -1188,7 +1255,10 @@ export default function SettingsPage() {
                         <p className="font-medium text-sm md:text-base">两步验证</p>
                         <p className="text-xs md:text-sm text-default-500">登录时需要二次验证</p>
                       </div>
-                      <Switch defaultSelected={settings.twoFactorAuth} />
+                      <Switch 
+                        isSelected={localSettings.twoFactorAuth} 
+                        onValueChange={(val) => handleSettingsChange('twoFactorAuth', val)} 
+                      />
                     </div>
                   </CardBody>
                 </Card>
