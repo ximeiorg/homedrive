@@ -1,4 +1,4 @@
-use rand::RngCore;
+use rand::prelude::*;
 use std::fs;
 
 /// 获取 JWT 密钥文件路径 (~/.homedrive/.jwt_secret)
@@ -53,6 +53,6 @@ pub fn load_jwt_secret() -> String {
 pub fn generate_jwt_secret() -> String {
     let mut rng = rand::rng();
     let mut key = [0u8; 32];
-    rng.fill_bytes(&mut key);
+    rng.fill(&mut key);
     base64::Engine::encode(&base64::engine::general_purpose::STANDARD, key)
 }
