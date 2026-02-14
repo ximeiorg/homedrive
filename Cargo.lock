@@ -1316,17 +1316,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "96547c2556ec9d12fb1578c4eaf448b04993e7fb79cbaad930a656880a6bdfa0"
 dependencies = [
  "bytes",
- "futures-channel",
- "futures-util",
  "http",
  "http-body",
  "hyper",
- "libc",
  "pin-project-lite",
- "socket2",
  "tokio",
  "tower-service",
- "tracing",
 ]
 
 [[package]]
@@ -2759,13 +2754,11 @@ dependencies = [
  "axum",
  "axum-extra",
  "base64",
- "bytes",
  "chrono",
  "config",
  "dotenvy",
  "futures",
  "hyper",
- "hyper-util",
  "jsonwebtoken",
  "mime_guess",
  "once_cell",
@@ -2785,7 +2778,6 @@ dependencies = [
  "tracing-subscriber",
  "urlencoding",
  "validator",
- "xxhash-rust",
 ]
 
 [[package]]
@@ -2803,7 +2795,6 @@ dependencies = [
  "sea-orm",
  "serde",
  "serde_json",
- "sha2",
  "store",
  "thiserror",
  "tokio",

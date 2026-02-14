@@ -21,6 +21,3 @@ sea-orm = "2.0.0-rc.30"
 futures = "0.3"
 bytes = "1"
 xxhash-rust = { version = "0.8.15", features = ["xxh3"] }
-
-[dependencies.sha2]
-version = "0.10"
