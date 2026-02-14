@@ -28,6 +28,7 @@ export interface InitAdminResponse {
     avatar: string | null;
     storage_tag: string;
     created_at: string;
+    role?: string;
   };
 }
 
@@ -44,6 +45,7 @@ export interface LoginResponse {
     avatar: string | null;
     storage_tag: string;
     created_at: string;
+    role?: string;
   };
 }
 
@@ -316,7 +318,7 @@ export interface SystemStats {
 
 // 获取系统状态
 export async function getSystemStats(): Promise<SystemStats> {
-  const response = await fetch(`${SYSTEM_API}/stats`);
+  const response = await authFetch(`${SYSTEM_API}/stats`);
   if (!response.ok) {
     throw new Error("Failed to get system stats");
   }

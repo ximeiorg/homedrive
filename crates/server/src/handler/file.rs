@@ -64,21 +64,20 @@ const ALLOWED_MIME_TYPES: &[&str] = &[
 
 /// 危险文件扩展名黑名单
 const DANGEROUS_EXTENSIONS: &[&str] = &[
-    "exe", "bat", "cmd", "com", "pif", "scr", "vbs", "js", "jar",
-    "msi", "dll", "sh", "bash", "zsh", "fish",
-    "php", "asp", "aspx", "jsp", "cgi", "pl", "py",
-    "html", "htm", "xhtml", "shtml",
+    "exe", "bat", "cmd", "com", "pif", "scr", "vbs", "js", "jar", "msi", "dll", "sh", "bash",
+    "zsh", "fish", "php", "asp", "aspx", "jsp", "cgi", "pl", "py", "html", "htm", "xhtml", "shtml",
 ];
 
 /// 检查 MIME 类型是否在白名单中
 fn is_mime_type_allowed(mime_type: &str) -> bool {
     // 允许所有以 image/, video/, audio/ 开头的类型
-    if mime_type.starts_with("image/") 
-        || mime_type.starts_with("video/") 
-        || mime_type.starts_with("audio/") {
+    if mime_type.starts_with("image/")
+        || mime_type.starts_with("video/")
+        || mime_type.starts_with("audio/")
+    {
         return true;
     }
-    
+
     // 检查白名单
     ALLOWED_MIME_TYPES.contains(&mime_type)
 }
@@ -100,27 +99,27 @@ fn is_path_safe(path: &str) -> bool {
     if path.is_empty() {
         return false;
     }
-    
+
     // 不允许路径遍历
     if path.contains("..") {
         return false;
     }
-    
+
     // 不允许绝对路径
     if path.starts_with('/') {
         return false;
     }
-    
+
     // 不允许 Windows 风格的绝对路径
     if path.len() > 2 && path.chars().nth(1) == Some(':') {
         return false;
     }
-    
+
     // 不允许空字节注入
     if path.contains('\0') {
         return false;
     }
-    
+
     true
 }
 
@@ -130,22 +129,22 @@ fn is_filename_safe(filename: &str) -> bool {
     if filename.is_empty() {
         return false;
     }
-    
+
     // 不允许路径遍历
     if filename.contains("..") || filename.contains('/') || filename.contains('\\') {
         return false;
     }
-    
+
     // 不允许空字节注入
     if filename.contains('\0') {
         return false;
     }
-    
+
     // 限制文件名长度
     if filename.len() > 255 {
         return false;
     }
-    
+
     true
 }
 
@@ -214,7 +213,7 @@ pub async fn upload_file(
                 if field_name == "file" {
                     // 找到文件字段，处理文件上传
                     let filename = field.file_name().unwrap_or("unknown").to_string();
-                    
+
                     // 验证文件名安全性
                     if !is_filename_safe(&filename) {
                         tracing::warn!(filename = %filename, "Invalid filename rejected");
@@ -224,7 +223,7 @@ pub async fn upload_file(
                             message: "Invalid filename".to_string(),
                         }));
                     }
-                    
+
                     // 检查危险扩展名
                     if is_dangerous_extension(&filename) {
                         tracing::warn!(filename = %filename, user_id = uploader_id, "Dangerous file extension rejected");
@@ -234,7 +233,7 @@ pub async fn upload_file(
                             message: "File type not allowed for security reasons".to_string(),
                         }));
                     }
-                    
+
                     let content_type = field
                         .content_type()
                         .unwrap_or("application/octet-stream")
@@ -273,7 +272,11 @@ pub async fn upload_file(
                     .await
                     {
                         Ok((file_id, message)) => {
-                            tracing::info!(file_id = file_id, user_id = uploader_id, "File uploaded successfully");
+                            tracing::info!(
+                                file_id = file_id,
+                                user_id = uploader_id,
+                                "File uploaded successfully"
+                            );
                             return Ok(Json(UploadFileResponse {
                                 success: true,
                                 file_id,
@@ -347,19 +350,19 @@ pub async fn serve_file(
 ) -> impl IntoResponse {
     let db = &state.conn;
     let user_id = auth.0;
-    
+
     // 验证 storage_tag 安全性
     if !is_path_safe(&storage_tag) {
         tracing::warn!(user_id = user_id, storage_tag = %storage_tag, "Invalid storage_tag rejected");
         return Err(AppError::InvalidInput("Invalid storage tag".to_string()));
     }
-    
+
     // 验证 file_path 安全性
     if !is_path_safe(&file_path) {
         tracing::warn!(user_id = user_id, file_path = %file_path, "Invalid file_path rejected");
         return Err(AppError::InvalidInput("Invalid file path".to_string()));
     }
-    
+
     // Get user's storage_tag from database
     let user = match store::member::query::Query::find_by_id(db, user_id).await {
         Ok(Some(m)) => m,
@@ -393,12 +396,12 @@ pub async fn serve_file(
         Ok(p) => p,
         Err(_) => return Err(AppError::NotFound),
     };
-    
+
     let canonical_root = match PathBuf::from(storage_root).canonicalize() {
         Ok(p) => p,
         Err(_) => return Err(AppError::NotFound),
     };
-    
+
     // 确保解析后的路径仍在存储根目录内
     if !canonical_path.starts_with(&canonical_root) {
         tracing::warn!(
@@ -512,10 +515,12 @@ pub async fn serve_file(
 /// 列出当前用户文件 - 需要认证
 pub async fn list_files(
     State(state): State<Arc<AppState>>,
-    Authorized(member_id): Authorized,
+    auth: Authorized,
     ValidatedQuery(query): ValidatedQuery<ListFilesQuery>,
 ) -> crate::error::Result<Json<schema::file::FileListResponse>> {
     use schema::file::FileListItem;
+
+    let member_id = auth.user_id();
 
     // 通过 services 层查询文件列表
     let params = services::ListMemberFilesParams {
@@ -597,14 +602,16 @@ pub async fn list_files(
 /// 触发同步任务 - 需要认证
 pub async fn trigger_sync_files(
     State(state): State<Arc<AppState>>,
-    Authorized(member_id): Authorized,
+    auth: Authorized,
     ValidatedJson(req): ValidatedJson<TriggerSyncRequest>,
 ) -> crate::error::Result<Json<TriggerSyncResponse>> {
+    let member_id = auth.user_id();
+
     // 确定路径和任务类型
     let path = req
         .path
         .unwrap_or_else(|| state.config.storage.volume.clone());
-    
+
     // 验证路径安全性
     if !is_path_safe(&path) {
         tracing::warn!(user_id = member_id, path = %path, "Invalid sync path rejected");
@@ -613,7 +620,7 @@ pub async fn trigger_sync_files(
             message: "Invalid path".to_string(),
         }));
     }
-    
+
     let task_type = req.task_type.as_deref().unwrap_or("sync_files");
 
     // 创建任务负载
@@ -647,7 +654,7 @@ pub async fn trigger_sync_files(
 /// 获取任务列表 - 需要认证
 pub async fn list_tasks(
     State(state): State<Arc<AppState>>,
-    Authorized(_member_id): Authorized,
+    _auth: Authorized,
 ) -> Json<TaskListResponse> {
     use sea_orm::{EntityTrait, QuerySelect};
     use store::entity::task_messages::{Column, Entity as TaskMessages};
@@ -696,7 +703,7 @@ pub async fn list_tasks(
 /// 获取单个任务详情 - 需要认证
 pub async fn get_task(
     State(state): State<Arc<AppState>>,
-    Authorized(_member_id): Authorized,
+    _auth: Authorized,
     Path(id): Path<i64>,
 ) -> Result<Json<TaskItemResponse>, AppError> {
     use sea_orm::EntityTrait;
@@ -741,15 +748,16 @@ pub async fn get_task(
 /// 创建任务并将任务记录保存到数据库
 pub async fn sync_files(
     State(state): State<Arc<AppState>>,
-    Authorized(member_id): Authorized,
+    auth: Authorized,
     ValidatedJson(req): ValidatedJson<SyncFilesRequest>,
 ) -> crate::error::Result<Json<SyncFilesResponse>> {
     use sea_orm::{ActiveModelTrait, Set};
     use store::entity::task_messages::TaskStatus;
 
+    let member_id = auth.user_id();
     let db = &state.conn;
     let storage_root = state.config.storage.volume.clone();
-    
+
     // 获取路径并验证安全性
     let sync_path = req.path.unwrap_or_else(|| storage_root.clone());
     if !is_path_safe(&sync_path) {

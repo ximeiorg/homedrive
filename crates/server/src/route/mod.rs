@@ -9,6 +9,7 @@ mod member;
 mod task;
 
 use crate::{
+    auth::AdminOnly,
     handler::member::{check_members_empty, check_username_exists, init_admin},
     handler::system::get_system_stats,
     state::AppState,
@@ -20,8 +21,8 @@ use axum::{
     routing::{get, post},
 };
 pub use file::{file_router, static_router};
-use hyper::header::{ACCEPT, AUTHORIZATION, CONTENT_TYPE};
 use hyper::Method;
+use hyper::header::{ACCEPT, AUTHORIZATION, CONTENT_TYPE};
 pub use member::member_router;
 use std::sync::Arc;
 pub use task::task_router;
@@ -33,7 +34,9 @@ pub fn routes(state: &Arc<AppState>) -> Router<Arc<AppState>> {
     let cors_origin = &state.config.server.cors_origin;
     let (allow_origin, allow_credentials) = if cors_origin == "*" {
         // 开发模式：允许所有来源，但不能使用 credentials
-        tracing::warn!("CORS is configured to allow all origins. This is not recommended for production.");
+        tracing::warn!(
+            "CORS is configured to allow all origins. This is not recommended for production."
+        );
         (AllowOrigin::any(), false)
     } else {
         // 生产模式：只允许指定的来源，可以使用 credentials
@@ -41,7 +44,7 @@ pub fn routes(state: &Arc<AppState>) -> Router<Arc<AppState>> {
             .split(',')
             .map(|s| s.trim().to_string())
             .collect();
-        
+
         // 解析为 HeaderValue
         let origin_values: Vec<hyper::header::HeaderValue> = origins
             .into_iter()
@@ -55,7 +58,7 @@ pub fn routes(state: &Arc<AppState>) -> Router<Arc<AppState>> {
                 }
             })
             .collect();
-        
+
         if origin_values.is_empty() {
             tracing::warn!("No valid CORS origins configured, allowing all origins");
             (AllowOrigin::any(), false)
@@ -87,7 +90,13 @@ pub fn routes(state: &Arc<AppState>) -> Router<Arc<AppState>> {
         .layer(
             CorsLayer::new()
                 .allow_origin(allow_origin)
-                .allow_methods([Method::GET, Method::POST, Method::PUT, Method::DELETE, Method::OPTIONS])
+                .allow_methods([
+                    Method::GET,
+                    Method::POST,
+                    Method::PUT,
+                    Method::DELETE,
+                    Method::OPTIONS,
+                ])
                 .allow_headers([ACCEPT, AUTHORIZATION, CONTENT_TYPE])
                 .allow_credentials(allow_credentials)
                 .max_age(std::time::Duration::from_secs(3600)),

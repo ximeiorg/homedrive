@@ -81,11 +81,21 @@ pub async fn list_albums(
     for a in albums {
         let cover_url = if let Some(file_id) = a.cover_file_id {
             // 同步查询封面文件的 storage_path
-            if let Ok(Some(member_file)) = store::member_file::query::Query::find_by_id(&state.conn, file_id).await {
-                if let Ok(Some(file_content)) = store::file_content::query::Query::find_by_id(&state.conn, member_file.file_content_id).await {
+            if let Ok(Some(member_file)) =
+                store::member_file::query::Query::find_by_id(&state.conn, file_id).await
+            {
+                if let Ok(Some(file_content)) = store::file_content::query::Query::find_by_id(
+                    &state.conn,
+                    member_file.file_content_id,
+                )
+                .await
+                {
                     let storage_path = file_content.storage_path;
                     if !storage_path.is_empty() {
-                        Some(format!("{}/api/static/{}", state.config.base_url, storage_path))
+                        Some(format!(
+                            "{}/api/static/{}",
+                            state.config.base_url, storage_path
+                        ))
                     } else {
                         None
                     }
@@ -98,7 +108,7 @@ pub async fn list_albums(
         } else {
             None
         };
-        
+
         items.push(AlbumListItem {
             id: a.id,
             name: a.name,
@@ -234,7 +244,12 @@ pub async fn list_album_files(
                     fc.file_size,
                     fc.thumbnail.clone(),
                 ),
-                None => (String::new(), "application/octet-stream".to_string(), 0, None),
+                None => (
+                    String::new(),
+                    "application/octet-stream".to_string(),
+                    0,
+                    None,
+                ),
             };
 
             // 构建文件访问 URL: {base_url}/api/static/{storage_path}
@@ -242,7 +257,10 @@ pub async fn list_album_files(
             let url = if storage_path.is_empty() {
                 None
             } else {
-                Some(format!("{}/api/static/{}", state.config.base_url, storage_path))
+                Some(format!(
+                    "{}/api/static/{}",
+                    state.config.base_url, storage_path
+                ))
             };
 
             // 构建缩略图 URL

@@ -1,24 +1,60 @@
 use serde::{Deserialize, Serialize};
 use validator::Validate;
 
+/// Member role enum
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum MemberRole {
+    Admin,
+    User,
+}
+
+impl Default for MemberRole {
+    fn default() -> Self {
+        Self::User
+    }
+}
+
+impl MemberRole {
+    pub fn is_admin(&self) -> bool {
+        matches!(self, Self::Admin)
+    }
+
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Admin => "admin",
+            Self::User => "user",
+        }
+    }
+}
+
+impl std::fmt::Display for MemberRole {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.as_str())
+    }
+}
+
 /// 创建成员请求
 #[derive(Debug, Serialize, Deserialize, Validate)]
 pub struct CreateMemberRequest {
     /// 用户名，3-50个字符，只允许字母、数字、下划线
     #[validate(length(min = 3, max = 50, message = "用户名长度必须在3-50个字符之间"))]
     pub username: String,
-    
+
     /// 密码，至少6个字符
     #[validate(length(min = 6, max = 128, message = "密码长度必须在6-128个字符之间"))]
     pub password: String,
-    
+
     /// 头像URL（可选）
     #[validate(url(message = "头像必须是有效的URL格式"))]
     pub avatar: Option<String>,
-    
+
     /// 存储标签，1-50个字符
     #[validate(length(min = 1, max = 50, message = "存储标签长度必须在1-50个字符之间"))]
     pub storage_tag: String,
+
+    /// 角色（可选，默认为 user）
+    pub role: Option<MemberRole>,
 }
 
 /// 更新成员请求
@@ -27,18 +63,28 @@ pub struct UpdateMemberRequest {
     /// 用户名（可选），3-50个字符
     #[validate(length(min = 3, max = 50, message = "用户名长度必须在3-50个字符之间"))]
     pub username: Option<String>,
-    
+
     /// 密码（可选），至少6个字符
     #[validate(length(min = 6, max = 128, message = "密码长度必须在6-128个字符之间"))]
     pub password: Option<String>,
-    
+
     /// 头像URL（可选）
     #[validate(url(message = "头像必须是有效的URL格式"))]
     pub avatar: Option<String>,
-    
+
     /// 存储标签（可选），1-50个字符
     #[validate(length(min = 1, max = 50, message = "存储标签长度必须在1-50个字符之间"))]
     pub storage_tag: Option<String>,
+
+    /// 角色（可选）
+    pub role: Option<MemberRole>,
+}
+
+/// 更新角色请求（仅管理员）
+#[derive(Debug, Serialize, Deserialize, Validate)]
+pub struct UpdateRoleRequest {
+    /// 新角色
+    pub role: MemberRole,
 }
 
 /// 成员列表查询参数
@@ -47,7 +93,7 @@ pub struct ListMembersQuery {
     /// 页码，最小为1
     #[validate(range(min = 1, message = "页码必须大于0"))]
     pub page: Option<u64>,
-    
+
     /// 每页大小，1-100
     #[validate(range(min = 1, max = 100, message = "每页大小必须在1-100之间"))]
     pub page_size: Option<u64>,
@@ -76,6 +122,7 @@ pub struct MemberResponse {
     pub username: String,
     pub avatar: Option<String>,
     pub storage_tag: String,
+    pub role: MemberRole,
     pub storage_used: i64,  // 已使用存储（字节）
     pub storage_total: i64, // 总存储空间（字节）
     pub last_active: Option<chrono::DateTime<chrono::Utc>>, // 最后活跃时间
@@ -98,7 +145,7 @@ pub struct LoginRequest {
     /// 用户名
     #[validate(length(min = 1, max = 50, message = "用户名不能为空且不能超过50个字符"))]
     pub username: String,
-    
+
     /// 密码
     #[validate(length(min = 1, max = 128, message = "密码不能为空"))]
     pub password: String,
@@ -130,11 +177,11 @@ pub struct InitAdminRequest {
     /// 用户名，3-50个字符
     #[validate(length(min = 3, max = 50, message = "用户名长度必须在3-50个字符之间"))]
     pub username: String,
-    
+
     /// 密码，至少6个字符
     #[validate(length(min = 6, max = 128, message = "密码长度必须在6-128个字符之间"))]
     pub password: String,
-    
+
     /// 存储标签，1-50个字符
     #[validate(length(min = 1, max = 50, message = "存储标签长度必须在1-50个字符之间"))]
     pub storage_tag: String,
@@ -161,5 +208,6 @@ pub fn validate_storage_tag_format(tag: &str) -> bool {
     if tag.is_empty() {
         return false;
     }
-    tag.chars().all(|c| c.is_alphanumeric() || c == '_' || c == '-')
+    tag.chars()
+        .all(|c| c.is_alphanumeric() || c == '_' || c == '-')
 }

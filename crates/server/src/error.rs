@@ -157,12 +157,15 @@ impl From<validator::ValidationErrors> for AppError {
                     format!(
                         "{}: {}",
                         field,
-                        e.message.as_ref().map(|m| m.to_string()).unwrap_or_else(|| "invalid value".to_string())
+                        e.message
+                            .as_ref()
+                            .map(|m| m.to_string())
+                            .unwrap_or_else(|| "invalid value".to_string())
                     )
                 })
             })
             .collect();
-        
+
         AppError::ValidationError(error_messages.join("; "))
     }
 }

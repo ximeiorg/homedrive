@@ -5,10 +5,63 @@ use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use tracing::error;
 
+/// Member role enum - must match schema::member::MemberRole
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum MemberRole {
+    #[default]
+    User,
+    Admin,
+}
+
+impl MemberRole {
+    pub fn is_admin(&self) -> bool {
+        matches!(self, Self::Admin)
+    }
+}
+
+impl From<schema::member::MemberRole> for MemberRole {
+    fn from(role: schema::member::MemberRole) -> Self {
+        match role {
+            schema::member::MemberRole::Admin => Self::Admin,
+            schema::member::MemberRole::User => Self::User,
+        }
+    }
+}
+
+impl From<MemberRole> for schema::member::MemberRole {
+    fn from(role: MemberRole) -> Self {
+        match role {
+            MemberRole::Admin => Self::Admin,
+            MemberRole::User => Self::User,
+        }
+    }
+}
+
+impl From<store::entity::members::MemberRole> for MemberRole {
+    fn from(role: store::entity::members::MemberRole) -> Self {
+        match role {
+            store::entity::members::MemberRole::Admin => Self::Admin,
+            store::entity::members::MemberRole::User => Self::User,
+        }
+    }
+}
+
+impl From<MemberRole> for store::entity::members::MemberRole {
+    fn from(role: MemberRole) -> Self {
+        match role {
+            MemberRole::Admin => Self::Admin,
+            MemberRole::User => Self::User,
+        }
+    }
+}
+
 /// JWT Claims
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct JwtClaims {
     pub sub: i64,
+    #[serde(default)]
+    pub role: MemberRole,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub aud: Option<String>,
     pub exp: u64,
@@ -26,9 +79,23 @@ impl From<JwtClaims> for Auth {
 }
 
 /// 已认证用户提取器
-/// 自动从 JWT Claims 中提取用户 ID，handler 只需使用此类型
+/// 自动从 JWT Claims 中提取用户 ID 和角色，handler 只需使用此类型
 #[derive(Clone, Debug)]
-pub struct Authorized(pub i64);
+pub struct Authorized(pub i64, pub MemberRole);
+
+impl Authorized {
+    pub fn is_admin(&self) -> bool {
+        self.1.is_admin()
+    }
+
+    pub fn user_id(&self) -> i64 {
+        self.0
+    }
+
+    pub fn role(&self) -> &MemberRole {
+        &self.1
+    }
+}
 
 impl<S> FromRequestParts<S> for Authorized
 where
@@ -41,7 +108,31 @@ where
         _state: &S,
     ) -> Result<Self, Self::Rejection> {
         let claims = JwtClaims::from_request_parts(parts, _state).await?;
-        Ok(Authorized(claims.sub))
+        Ok(Authorized(claims.sub, claims.role))
+    }
+}
+
+/// Admin only extractor - only allows admin users
+#[derive(Clone, Debug)]
+pub struct AdminOnly(pub i64);
+
+impl<S> FromRequestParts<S> for AdminOnly
+where
+    S: Send + Sync,
+{
+    type Rejection = AppError;
+
+    async fn from_request_parts(
+        parts: &mut axum::http::request::Parts,
+        _state: &S,
+    ) -> Result<Self, Self::Rejection> {
+        let claims = JwtClaims::from_request_parts(parts, _state).await?;
+
+        if !claims.role.is_admin() {
+            return Err(AppError::Forbidden);
+        }
+
+        Ok(AdminOnly(claims.sub))
     }
 }
 

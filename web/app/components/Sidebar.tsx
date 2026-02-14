@@ -14,6 +14,7 @@ import {
   Layers,
   Settings,
 } from "lucide-react";
+import { useAuth } from "../auth-context";
 
 interface SidebarProps {
   selectedKey?: string;
@@ -101,6 +102,7 @@ const serverStatus = {
 function DesktopSidebar({ selectedKey }: { selectedKey?: string }) {
   const location = useLocation();
   const [searchParams] = useSearchParams();
+  const { isAdmin } = useAuth();
 
   const renderNavItem = (item: typeof mainItems[0]) => {
     const url = getItemUrl(item.key, searchParams);
@@ -213,14 +215,16 @@ function DesktopSidebar({ selectedKey }: { selectedKey?: string }) {
           </div>
         </div>
 
-        {/* Settings Link */}
-        <Link
-          to="/settings"
-          className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-default-100 text-default-600 transition-colors"
-        >
-          <Settings className="w-4 h-4" />
-          <span className="text-sm">系统设置</span>
-        </Link>
+        {/* Settings Link - Only visible to admin users */}
+        {isAdmin && (
+          <Link
+            to="/settings"
+            className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-default-100 text-default-600 transition-colors"
+          >
+            <Settings className="w-4 h-4" />
+            <span className="text-sm">系统设置</span>
+          </Link>
+        )}
       </div>
     </aside>
   );

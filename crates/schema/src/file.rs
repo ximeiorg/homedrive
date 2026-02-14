@@ -63,27 +63,27 @@ pub struct ListFilesQuery {
     /// 文件路径（可选）
     #[validate(length(max = 500, message = "路径长度不能超过500个字符"))]
     pub path: Option<String>,
-    
+
     /// 页码，最小为1
     #[validate(range(min = 1, message = "页码必须大于0"))]
     pub page: Option<u64>,
-    
+
     /// 每页大小，1-100
     #[validate(range(min = 1, max = 100, message = "每页大小必须在1-100之间"))]
     pub page_size: Option<u64>,
-    
+
     /// 排序字段
     #[validate(length(max = 50, message = "排序字段长度不能超过50个字符"))]
     pub sort_by: Option<String>,
-    
+
     /// 排序方向
     #[validate(length(max = 10, message = "排序方向长度无效"))]
     pub sort_order: Option<String>,
-    
+
     /// 文件类型过滤
     #[validate(length(max = 50, message = "文件类型长度不能超过50个字符"))]
     pub file_type: Option<String>,
-    
+
     /// 搜索关键词
     #[validate(length(max = 200, message = "搜索关键词长度不能超过200个字符"))]
     pub search: Option<String>,
@@ -94,7 +94,7 @@ pub struct TriggerSyncRequest {
     /// 同步路径（可选）
     #[validate(length(max = 500, message = "路径长度不能超过500个字符"))]
     pub path: Option<String>,
-    
+
     /// 任务类型（可选）
     #[validate(length(max = 50, message = "任务类型长度不能超过50个字符"))]
     pub task_type: Option<String>,

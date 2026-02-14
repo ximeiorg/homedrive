@@ -3,7 +3,7 @@ use sea_orm::{
 };
 use serde::{Deserialize, Serialize};
 
-use super::super::entity::members;
+use super::super::entity::members::{self, MemberRole};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct CreateMember {
@@ -11,6 +11,7 @@ pub struct CreateMember {
     pub password: String,
     pub avatar: Option<String>,
     pub storage_tag: String,
+    pub role: Option<MemberRole>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -19,6 +20,7 @@ pub struct UpdateMember {
     pub password: Option<String>,
     pub avatar: Option<String>,
     pub storage_tag: Option<String>,
+    pub role: Option<MemberRole>,
 }
 
 pub struct Mutation;
@@ -35,6 +37,7 @@ impl Mutation {
             avatar: Set(data.avatar),
             storage_tag: Set(data.storage_tag),
             created_at: Set(chrono::Utc::now()),
+            role: Set(data.role.unwrap_or(MemberRole::User)),
             ..Default::default()
         };
 
@@ -64,6 +67,9 @@ impl Mutation {
         }
         if let Some(storage_tag) = data.storage_tag {
             active_model.storage_tag = Set(storage_tag);
+        }
+        if let Some(role) = data.role {
+            active_model.role = Set(role);
         }
 
         active_model.update(db).await
@@ -112,6 +118,21 @@ impl Mutation {
 
         let mut active_model: members::ActiveModel = member.into();
         active_model.password = Set(new_password);
+        active_model.update(db).await
+    }
+
+    /// 更新成员角色
+    pub async fn update_role(
+        db: &DatabaseConnection,
+        id: i64,
+        role: MemberRole,
+    ) -> Result<members::Model, sea_orm::DbErr> {
+        let member: Option<members::Model> = members::Entity::find_by_id(id).one(db).await?;
+        let member =
+            member.ok_or_else(|| sea_orm::DbErr::Custom("Member not found".to_string()))?;
+
+        let mut active_model: members::ActiveModel = member.into();
+        active_model.role = Set(role);
         active_model.update(db).await
     }
 }

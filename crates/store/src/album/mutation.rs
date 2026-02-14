@@ -82,7 +82,7 @@ impl Mutation {
             .filter(album_files::Column::AlbumId.eq(album_id))
             .exec(db)
             .await?;
-        
+
         // 再删除相册本身
         albums::Entity::delete_by_id(album_id).exec(db).await
     }

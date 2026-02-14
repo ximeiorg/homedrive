@@ -548,16 +548,16 @@ export default function SettingsPage() {
             }
           >
             <div className="mt-4 md:mt-6 grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
-              {/* Server Status Card */}
+              {/* Server IP Card */}
               <Card className="border-none shadow-md">
                 <CardBody className="flex flex-row items-center gap-3 p-4">
-                  <div className={`p-2 rounded-xl ${serverStats?.status === 'online' ? 'bg-success/20' : 'bg-danger/20'}`}>
-                    <ServerIcon className={`w-5 h-5 md:w-6 md:h-6 ${serverStats?.status === 'online' ? 'text-success' : 'text-danger'}`} />
+                  <div className="p-2 rounded-xl bg-success/20">
+                    <ServerIcon className="w-5 h-5 md:w-6 md:h-6 text-success" />
                   </div>
                   <div className="min-w-0">
-                    <p className="text-xs text-default-500 truncate">服务器</p>
-                    <p className={`text-sm md:text-lg font-bold ${serverStats?.status === 'online' ? 'text-success' : 'text-danger'}`}>
-                      {serverStats?.status === 'online' ? '运行中' : '离线'}
+                    <p className="text-xs text-default-500 truncate">服务器IP</p>
+                    <p className="text-sm md:text-lg font-bold">
+                      {serverStats?.server_ip || '未知'}
                     </p>
                   </div>
                 </CardBody>

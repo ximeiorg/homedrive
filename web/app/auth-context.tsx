@@ -1,17 +1,21 @@
 import React, { createContext, useContext, useState, useEffect, type ReactNode } from "react";
 
+export type MemberRole = "admin" | "user";
+
 export interface Member {
   id: number;
   username: string;
   avatar: string | null;
   storage_tag: string;
   created_at: string;
+  role?: MemberRole;
 }
 
 interface AuthContextType {
   isAuthenticated: boolean;
   member: Member | null;
   token: string | null;
+  isAdmin: boolean;
   login: (token: string, member: Member) => void;
   logout: () => void;
 }
@@ -71,6 +75,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isAuthenticated: !!authState.token,
         member: authState.member,
         token: authState.token,
+        isAdmin: authState.member?.role === "admin",
         login,
         logout,
       }}

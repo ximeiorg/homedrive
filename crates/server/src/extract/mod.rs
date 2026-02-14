@@ -3,10 +3,10 @@
 //! 提供自动验证的提取器，使 handler 代码更简洁
 
 use axum::{
-    extract::{rejection::JsonRejection, FromRequest, Request},
+    Json,
+    extract::{FromRequest, Request, rejection::JsonRejection},
     http::StatusCode,
     response::{IntoResponse, Response},
-    Json,
 };
 use serde::de::DeserializeOwned;
 use thiserror::Error;
@@ -42,7 +42,8 @@ where
     type Rejection = ServerError;
 
     async fn from_request(req: Request, state: &S) -> Result<Self, Self::Rejection> {
-        let axum::extract::Query(value) = axum::extract::Query::<T>::from_request(req, state).await?;
+        let axum::extract::Query(value) =
+            axum::extract::Query::<T>::from_request(req, state).await?;
         value.validate()?;
         Ok(ValidatedQuery(value))
     }
@@ -76,21 +77,32 @@ impl IntoResponse for ServerError {
                             format!(
                                 "{}: {}",
                                 field,
-                                e.message.as_ref().map(|m| m.to_string()).unwrap_or_else(|| "无效值".to_string())
+                                e.message
+                                    .as_ref()
+                                    .map(|m| m.to_string())
+                                    .unwrap_or_else(|| "无效值".to_string())
                             )
                         })
                     })
                     .collect();
-                
+
                 let message = format!("验证失败: {}", error_messages.join("; "));
-                (StatusCode::BAD_REQUEST, crate::error::AppError::ValidationError(message)).into_response()
+                (
+                    StatusCode::BAD_REQUEST,
+                    crate::error::AppError::ValidationError(message),
+                )
+                    .into_response()
             }
-            ServerError::JsonRejection(rejection) => {
-                (StatusCode::BAD_REQUEST, crate::error::AppError::InvalidInput(rejection.body_text())).into_response()
-            }
-            ServerError::QueryRejection(msg) => {
-                (StatusCode::BAD_REQUEST, crate::error::AppError::InvalidInput(msg)).into_response()
-            }
+            ServerError::JsonRejection(rejection) => (
+                StatusCode::BAD_REQUEST,
+                crate::error::AppError::InvalidInput(rejection.body_text()),
+            )
+                .into_response(),
+            ServerError::QueryRejection(msg) => (
+                StatusCode::BAD_REQUEST,
+                crate::error::AppError::InvalidInput(msg),
+            )
+                .into_response(),
         }
     }
 }

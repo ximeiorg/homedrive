@@ -3,7 +3,7 @@ use chrono::{DateTime, Utc};
 use once_cell::sync::OnceCell;
 use schema::member::{
     CreateMemberRequest, InitAdminRequest, InitAdminResponse, IsEmptyResponse, LoginRequest,
-    LoginResponse, MemberListResponse, MemberResponse, UpdateMemberRequest,
+    LoginResponse, MemberListResponse, MemberResponse, UpdateMemberRequest, UpdateRoleRequest,
 };
 use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
 use serde::{Deserialize, Serialize};
@@ -76,11 +76,18 @@ impl MemberService {
         let last_active: Option<DateTime<Utc>> = None; // TODO: 实现最后活跃时间追踪
         let status = Self::determine_status(last_active);
 
+        // 转换角色
+        let role = match member.role {
+            store::entity::members::MemberRole::Admin => schema::member::MemberRole::Admin,
+            store::entity::members::MemberRole::User => schema::member::MemberRole::User,
+        };
+
         Ok(MemberResponse {
             id: member.id,
             username: member.username,
             avatar: member.avatar,
             storage_tag: member.storage_tag,
+            role,
             storage_used,
             storage_total: DEFAULT_STORAGE_TOTAL,
             last_active,
@@ -89,7 +96,7 @@ impl MemberService {
         })
     }
 
-    /// 创建新成员
+    /// 创建新成员（仅管理员可用）
     pub async fn create_member(
         db: &DatabaseConnection,
         data: CreateMemberRequest,
@@ -100,11 +107,18 @@ impl MemberService {
             crate::error::ServiceError::Unknown
         })?;
 
+        // 转换角色
+        let role = data.role.map(|r| match r {
+            schema::member::MemberRole::Admin => store::entity::members::MemberRole::Admin,
+            schema::member::MemberRole::User => store::entity::members::MemberRole::User,
+        });
+
         let create_data = store::member::mutation::CreateMember {
             username: data.username,
             password: hashed_password,
             avatar: data.avatar,
             storage_tag: data.storage_tag,
+            role,
         };
 
         let member = store::member::mutation::Mutation::create(db, create_data).await?;
@@ -132,15 +146,48 @@ impl MemberService {
         id: i64,
         data: UpdateMemberRequest,
     ) -> Result<MemberResponse> {
+        // 如果有密码，先进行哈希
+        let password = if let Some(pwd) = data.password {
+            let hashed = bcrypt::hash(&pwd, bcrypt::DEFAULT_COST).map_err(|e| {
+                tracing::error!("Failed to hash password: {:?}", e);
+                crate::error::ServiceError::Unknown
+            })?;
+            Some(hashed)
+        } else {
+            None
+        };
+
+        // 转换角色
+        let role = data.role.map(|r| match r {
+            schema::member::MemberRole::Admin => store::entity::members::MemberRole::Admin,
+            schema::member::MemberRole::User => store::entity::members::MemberRole::User,
+        });
+
         let update_data = store::member::mutation::UpdateMember {
             username: data.username,
-            password: data.password,
+            password,
             avatar: data.avatar,
             storage_tag: data.storage_tag,
+            role,
         };
 
         let member = store::member::mutation::Mutation::update(db, id, update_data).await?;
 
+        Self::build_member_response(db, member).await
+    }
+
+    /// 更新成员角色（仅管理员可用）
+    pub async fn update_member_role(
+        db: &DatabaseConnection,
+        id: i64,
+        data: UpdateRoleRequest,
+    ) -> Result<MemberResponse> {
+        let role = match data.role {
+            schema::member::MemberRole::Admin => store::entity::members::MemberRole::Admin,
+            schema::member::MemberRole::User => store::entity::members::MemberRole::User,
+        };
+
+        let member = store::member::mutation::Mutation::update_role(db, id, role).await?;
         Self::build_member_response(db, member).await
     }
 
@@ -150,7 +197,7 @@ impl MemberService {
         Ok(())
     }
 
-    /// 获取成员列表（分页）
+    /// 获取成员列表（分页）- 仅管理员可用
     pub async fn list_members(
         db: &DatabaseConnection,
         page: Option<u64>,
@@ -252,7 +299,7 @@ impl MemberService {
             return Err(crate::error::ServiceError::InvalidCredentials);
         }
 
-        // 生成 token
+        // 生成 token（包含角色信息）
         let token = generate_token(&member);
 
         // 构建完整的成员响应
@@ -326,20 +373,28 @@ impl MemberService {
         // 使用用户提供的 storage_tag
         let storage_tag = data.storage_tag;
 
-        // 调用 create_member 来创建管理员（会进行密码哈希和验证）
-        let create_request = CreateMemberRequest {
+        // 对密码进行哈希
+        let hashed_password = bcrypt::hash(&data.password, bcrypt::DEFAULT_COST).map_err(|e| {
+            tracing::error!("Failed to hash password: {:?}", e);
+            crate::error::ServiceError::Unknown
+        })?;
+
+        // 创建管理员用户（角色为 Admin）
+        let create_data = store::member::mutation::CreateMember {
             username: data.username,
-            password: data.password,
+            password: hashed_password,
             avatar: None,
             storage_tag,
+            role: Some(store::entity::members::MemberRole::Admin), // 初始化的管理员
         };
 
-        let member = Self::create_member(db, create_request).await?;
+        let member = store::member::mutation::Mutation::create(db, create_data).await?;
+        let member_response = Self::build_member_response(db, member).await?;
 
         Ok(InitAdminResponse {
             success: true,
             message: "Admin user created successfully".to_string(),
-            member: Some(member),
+            member: Some(member_response),
         })
     }
 }
@@ -348,20 +403,27 @@ impl MemberService {
 #[derive(Debug, Serialize, Deserialize)]
 struct Claims {
     sub: i64,
+    role: String, // 角色信息
     aud: Option<String>,
     exp: u64,
     iat: u64,
 }
 
-/// 生成 JWT token
+/// 生成 JWT token（包含角色信息）
 fn generate_token(member: &store::entity::members::Model) -> String {
     let secret = get_jwt_secret();
     let header = jsonwebtoken::Header::default();
     let now = Utc::now();
     let expiration = now + chrono::Duration::hours(24);
 
+    let role_str = match member.role {
+        store::entity::members::MemberRole::Admin => "admin",
+        store::entity::members::MemberRole::User => "user",
+    };
+
     let claims = Claims {
         sub: member.id,
+        role: role_str.to_string(),
         aud: Some("homedrive".to_string()),
         exp: expiration.timestamp() as u64,
         iat: now.timestamp() as u64,
