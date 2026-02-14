@@ -179,7 +179,11 @@ where
                 .split('&')
                 .find(|p| p.starts_with("token="))
                 .and_then(|p| p.strip_prefix("token="))
-                .map(|p| urlencoding::decode(p).map(|c| c.into_owned()).unwrap_or_else(|_| p.to_string()))
+                .map(|p| {
+                    urlencoding::decode(p)
+                        .map(|c| c.into_owned())
+                        .unwrap_or_else(|_| p.to_string())
+                })
                 .ok_or(AppError::InvalidCredentials)?
         };
 

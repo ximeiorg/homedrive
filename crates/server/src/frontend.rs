@@ -2,89 +2,81 @@
 //!
 //! 使用 rust-embed 将构建后的前端资源嵌入到二进制文件中
 
-use rust_embed::RustEmbed;
-use std::borrow::Cow;
+use axum::{
+    body::Body,
+    extract::Request,
+    http::{StatusCode, Uri, header},
+    response::{IntoResponse, Response},
+};
+use rust_embed::{EmbeddedFile, RustEmbed};
 
 /// 前端静态资源
 #[derive(RustEmbed)]
 #[folder = "../../web/build/client/"]
 pub struct FrontendAssets;
 
-/// 获取前端资源
-pub fn get_frontend_asset(path: &str) -> Option<FrontendAsset> {
-    // 去掉前导斜杠
-    let path = path.strip_prefix('/').unwrap_or(path);
-    
-    // 尝试直接获取文件
-    if let Some(asset) = FrontendAssets::get(path) {
-        return Some(FrontendAsset {
-            data: asset.data,
-            is_html: path.ends_with("index.html"),
-        });
-    }
-    
-    // 如果是目录，尝试 index.html
-    if !path.contains('.') {
-        let index_path = format!("{}/index.html", path);
-        if let Some(asset) = FrontendAssets::get(&index_path) {
-            return Some(FrontendAsset {
-                data: asset.data,
-                is_html: true,
-            });
+pub struct StaticFile<T>(pub T);
+
+impl<T> IntoResponse for StaticFile<T>
+where
+    T: Into<String>,
+{
+    fn into_response(self) -> Response {
+        let path = self.0.into();
+
+        // 判断是否是静态资源请求（包含文件扩展名）
+        let is_static_asset = path.contains('.');
+
+        // 首先尝试直接查找
+        let content = FrontendAssets::get(path.as_str());
+
+        match content {
+            Some(data) => {
+                let mime = mime_guess::from_path(&path).first_or_octet_stream();
+                println!("[Static] Found: {}, mime: {}", path, mime);
+                ([(header::CONTENT_TYPE, mime.as_ref())], data.data).into_response()
+            }
+            None => {
+                // 如果是静态资源且找不到，返回 404
+                if is_static_asset {
+                    println!("[Static] Not found: {}", path);
+                    return (StatusCode::NOT_FOUND, "Not Found").into_response();
+                }
+
+                // 否则返回 index.html 用于 SPA 路由
+                println!("[Static] Serving index.html for route: {}", path);
+                let index_path = "index.html";
+                if let Some(index_data) = FrontendAssets::get(index_path) {
+                    let mime = mime_guess::from_path(index_path).first_or_octet_stream();
+                    ([(header::CONTENT_TYPE, mime.as_ref())], index_data.data).into_response()
+                } else {
+                    (StatusCode::INTERNAL_SERVER_ERROR, "index.html not found").into_response()
+                }
+            }
         }
     }
-    
-    // 返回 index.html（SPA 路由支持）
-    if let Some(asset) = FrontendAssets::get("index.html") {
-        return Some(FrontendAsset {
-            data: asset.data,
-            is_html: true,
-        });
-    }
-    
-    None
 }
 
-/// 前端资源封装
-pub struct FrontendAsset {
-    pub data: Cow<'static, [u8]>,
-    pub is_html: bool,
+pub async fn index_handler(uri: Uri) -> impl IntoResponse + use<> {
+    handler_404(uri).await
 }
 
-/// 获取 MIME 类型
-pub fn get_mime_type(path: &str) -> &'static str {
-    let path = path.strip_prefix('/').unwrap_or(path);
-    
-    if path.ends_with(".html") || path == "index.html" {
-        return "text/html; charset=utf-8";
-    }
-    if path.ends_with(".js") {
-        return "application/javascript; charset=utf-8";
-    }
-    if path.ends_with(".css") {
-        return "text/css; charset=utf-8";
-    }
-    if path.ends_with(".json") {
-        return "application/json; charset=utf-8";
-    }
-    if path.ends_with(".png") {
-        return "image/png";
-    }
-    if path.ends_with(".jpg") || path.ends_with(".jpeg") {
-        return "image/jpeg";
-    }
-    if path.ends_with(".svg") {
-        return "image/svg+xml";
-    }
-    if path.ends_with(".ico") {
-        return "image/x-icon";
-    }
-    if path.ends_with(".woff") {
-        return "font/woff";
-    }
-    if path.ends_with(".woff2") {
-        return "font/woff2";
-    }
-    
-    "application/octet-stream"
+async fn handler_404(uri: Uri) -> impl IntoResponse {
+    let path = uri.path().trim_start_matches('/').to_string();
+
+    // 处理 build 前缀
+    let processed_path = if path.starts_with("build/") {
+        path.replace("build/", "")
+    } else {
+        path
+    };
+
+    let final_path = if processed_path.is_empty() {
+        "index.html".to_string()
+    } else {
+        processed_path
+    };
+
+    println!("[Handler] uri: {} -> path: {}", uri.path(), final_path);
+    StaticFile(final_path)
 }

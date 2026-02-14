@@ -9,59 +9,29 @@ mod member;
 mod task;
 
 use crate::{
-    auth::AdminOnly,
-    frontend::{get_frontend_asset, get_mime_type},
-    handler::member::{check_members_empty, check_username_exists, init_admin},
-    handler::system::get_system_stats,
+    frontend::index_handler,
+    handler::{
+        member::{check_members_empty, check_username_exists, init_admin},
+        system::get_system_stats,
+    },
     state::AppState,
 };
 pub use album::album_router;
 pub use auth::auth_router;
 use axum::{
+    Router,
     body::Body,
     extract::Path,
     response::IntoResponse,
-    Router,
     routing::{get, post},
 };
 pub use file::{file_router, static_router};
-use hyper::{Method, Response};
 use hyper::header::{ACCEPT, AUTHORIZATION, CONTENT_TYPE};
+use hyper::{Method, Response};
 pub use member::member_router;
 use std::sync::Arc;
 pub use task::task_router;
 use tower_http::cors::{AllowOrigin, CorsLayer};
-
-/// 静态文件服务（SPA fallback）
-async fn serve_frontend(
-    Path(path): Path<String>,
-) -> impl IntoResponse {
-    let path = path.trim_start_matches('/');
-    
-    if let Some(asset) = get_frontend_asset(path) {
-        let mime = get_mime_type(path);
-        Response::builder()
-            .status(hyper::StatusCode::OK)
-            .header("Content-Type", mime)
-            .header("Cache-Control", "public, max-age=31536000")
-            .body(Body::from(asset.data.to_vec()))
-            .unwrap()
-    } else {
-        // 返回 index.html（SPA 路由支持）
-        if let Some(asset) = get_frontend_asset("index.html") {
-            Response::builder()
-                .status(hyper::StatusCode::OK)
-                .header("Content-Type", "text/html; charset=utf-8")
-                .body(Body::from(asset.data.to_vec()))
-                .unwrap()
-        } else {
-            Response::builder()
-                .status(hyper::StatusCode::NOT_FOUND)
-                .body(Body::from("Not Found"))
-                .unwrap()
-        }
-    }
-}
 
 /// 创建应用主路由
 pub fn routes(state: &Arc<AppState>) -> Router<Arc<AppState>> {
@@ -122,8 +92,6 @@ pub fn routes(state: &Arc<AppState>) -> Router<Arc<AppState>> {
         .nest("/static", static_router())
         // 认证模块路由
         .nest("/auth", auth_router())
-        // 前端 SPA 路由（catch-all）
-        .fallback(serve_frontend)
         .layer(
             CorsLayer::new()
                 .allow_origin(allow_origin)

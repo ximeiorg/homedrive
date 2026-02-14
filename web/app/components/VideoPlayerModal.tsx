@@ -199,8 +199,8 @@ export function VideoPlayerModal({ isOpen, onClose, videoUrl, title }: VideoPlay
                 className="absolute inset-0 flex items-center justify-center cursor-pointer"
                 onClick={togglePlay}
               >
-                <div className="w-20 h-20 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center">
-                  <span className="w-10 h-10 text-white ml-1"><Icons.play /></span>
+                <div className="w-24 h-24 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center">
+                  <span className="w-14 h-14 text-white"><Icons.play /></span>
                 </div>
               </div>
             )}

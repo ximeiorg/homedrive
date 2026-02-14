@@ -1,10 +1,10 @@
 use std::net::SocketAddr;
 use std::sync::Arc;
 
-use axum::{Router, http::StatusCode, response::IntoResponse};
+use axum::Router;
 use tracing::info;
 
-use crate::{config::AppConfig, route::routes, state::AppState};
+use crate::{config::AppConfig, frontend::index_handler, route::routes, state::AppState};
 
 // 配置 jsonwebtoken 的加密提供者
 fn configure_jwt() {
@@ -84,6 +84,7 @@ pub async fn start() {
     let app = Router::new()
         .nest("/api", routes(&shared_state))
         .with_state(shared_state.clone())
+        // 前端 fallback（SPA 路由支持）
         .fallback(index_handler);
 
     // 获取端口（优先使用环境变量）
@@ -91,8 +92,4 @@ pub async fn start() {
         .unwrap_or_else(|| AppConfig::load().map(|c| c.server.port).unwrap_or(2300));
 
     serve(app, port).await;
-}
-
-async fn index_handler() -> impl IntoResponse {
-    (StatusCode::NOT_FOUND, "404 not Found")
 }
