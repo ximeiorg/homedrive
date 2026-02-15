@@ -11,6 +11,7 @@ pub use file_content::{FileCheckResponse, FileService, FileUploadResponse, ListM
 pub use member::{MemberService, get_jwt_secret, init_jwt_secret};
 pub use storage::{LocalStorage, StorageConfig, StorageService};
 pub use task::{
-    SyncFilesHandler, TaskHandler, TaskMessage, TaskOptions, TaskPayload, TaskSender,
-    TaskSenderType, TaskStatus, TaskType, TaskWorker, TaskWorkerConfig, create_task_channel,
+    GenerateThumbnailHandler, SyncFilesHandler, TaskHandler, TaskMessage, TaskOptions, TaskPayload,
+    TaskSender, TaskSenderType, TaskStatus, TaskType, TaskWorker, TaskWorkerConfig,
+    create_task_channel,
 };

@@ -1,0 +1,10 @@
+[package]
+name = "thumbnail"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+
+[dependencies]
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["process", "fs", "io-util"] }
+tracing = { workspace = true }

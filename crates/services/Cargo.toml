@@ -7,6 +7,7 @@ license = "MIT"
 [dependencies]
 store = { path = "../store" }
 schema = { path = "../schema" }
+thumbnail = { path = "../thumbnail" }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }

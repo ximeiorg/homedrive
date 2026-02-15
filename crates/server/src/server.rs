@@ -68,6 +68,12 @@ pub async fn start() {
         conn_arc.clone(),
     )));
 
+    // 注册缩略图生成任务处理器
+    worker.register_handler(Arc::new(services::GenerateThumbnailHandler::new(
+        config.storage.volume.clone(),
+        conn_arc.clone(),
+    )));
+
     // 在后台启动任务工作器
     tokio::spawn(async move {
         worker.start().await;

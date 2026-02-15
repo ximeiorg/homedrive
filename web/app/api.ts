@@ -228,7 +228,7 @@ export async function getTaskMessages(taskId: string): Promise<{
 }
 
 // 任务类型
-export type TaskType = "upload" | "download" | "process" | "sync";
+export type TaskType = "sync_files" | "generate_thumbnail" | "sync_directory" | "sync_database" | "cleanup_orphaned_files";
 export type TaskStatus = "pending" | "processing" | "completed" | "failed";
 
 // 任务项接口
@@ -289,6 +289,24 @@ export async function syncFiles(data: SyncFilesRequest): Promise<SyncFilesRespon
   });
   if (!response.ok) {
     throw new Error("Failed to sync files");
+  }
+  return response.json();
+}
+
+// 触发缩略图生成响应
+interface TriggerThumbnailResponse {
+  success: boolean;
+  task_id: number;
+  message: string;
+}
+
+// 生成视频缩略图（需要认证）
+export async function generateThumbnail(): Promise<TriggerThumbnailResponse> {
+  const response = await authFetch(`${FILES_API}/thumbnail`, {
+    method: "POST",
+  });
+  if (!response.ok) {
+    throw new Error("Failed to generate thumbnail");
   }
   return response.json();
 }

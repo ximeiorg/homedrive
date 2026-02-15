@@ -103,6 +103,7 @@ pub struct TriggerSyncRequest {
 #[derive(Serialize)]
 pub struct TriggerSyncResponse {
     pub success: bool,
+    pub task_id: i64,
     pub message: String,
 }
 

@@ -22,11 +22,11 @@ import {
   ModalFooter,
   useDisclosure,
 } from "@heroui/react";
-import { Settings, Clock, Trash2, User, Info } from "lucide-react";
+import { Settings, Clock, Trash2, User, AlertCircle } from "lucide-react";
 import { useMediaQuery } from "~/hooks/useMediaQuery";
 import { useAuth } from "../auth-context";
 import { useTheme, type Theme } from "../theme-context";
-import { getTaskList, syncFiles, type TaskItem, type TaskStatus, getMemberList, type MemberResponse, getSystemStats, type SystemStats } from "../api";
+import { getTaskList, syncFiles, generateThumbnail, type TaskItem, type TaskStatus, getMemberList, type MemberResponse, getSystemStats, type SystemStats } from "../api";
 import { TopBar } from "../components/TopBar";
 
 // Edit icon SVG
@@ -173,6 +173,31 @@ const FileIcon = ({ className }: { className?: string }) => (
     <line x1="16" y1="13" x2="8" y2="13" />
     <line x1="16" y1="17" x2="8" y2="17" />
     <polyline points="10,9 9,9 8,9" />
+  </svg>
+);
+
+// Image icon SVG
+const ImageIcon = ({ className }: { className?: string }) => (
+  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+    <circle cx="8.5" cy="8.5" r="1.5" />
+    <polyline points="21,15 16,10 5,21" />
+  </svg>
+);
+
+// Folder icon SVG
+const FolderIcon = ({ className }: { className?: string }) => (
+  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+  </svg>
+);
+
+// Database icon SVG
+const DatabaseIcon = ({ className }: { className?: string }) => (
+  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <ellipse cx="12" cy="5" rx="9" ry="3" />
+    <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3" />
+    <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5" />
   </svg>
 );
 
@@ -356,10 +381,11 @@ function MobileTaskCard({ task }: { task: TaskItem }) {
         <div className="flex items-start justify-between mb-3">
           <div className="flex items-center gap-3">
             <div className="p-2 rounded-lg bg-default-100">
-              {task.task_type === "upload" && <UploadIcon className="w-5 h-5 text-primary" />}
-              {task.task_type === "download" && <DownloadIcon className="w-5 h-5 text-success" />}
-              {task.task_type === "process" && <ProcessIcon className="w-5 h-5 text-warning" />}
-              {(task.task_type === "sync" || task.task_type === "sync_files") && <SyncIcon className="w-5 h-5 text-secondary" />}
+              {task.task_type === "sync_files" && <SyncIcon className="w-5 h-5 text-secondary" />}
+              {task.task_type === "generate_thumbnail" && <ImageIcon className="w-5 h-5 text-primary" />}
+              {task.task_type === "sync_directory" && <FolderIcon className="w-5 h-5 text-warning" />}
+              {task.task_type === "sync_database" && <DatabaseIcon className="w-5 h-5 text-success" />}
+              {task.task_type === "cleanup_orphaned_files" && <Trash2 className="w-5 h-5 text-danger" />}
             </div>
             <div>
               <p className="font-medium">{task.message || "同步文件任务"}</p>
@@ -426,6 +452,7 @@ export default function SettingsPage() {
   const [syncPath, setSyncPath] = useState("");
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncMessage, setSyncMessage] = useState("");
+  const [isGeneratingThumbnail, setIsGeneratingThumbnail] = useState(false);
   const [tasks, setTasks] = useState<TaskItem[]>([]);
   const [isLoadingTasks, setIsLoadingTasks] = useState(false);
   const [members, setMembers] = useState<MemberResponse[]>([]);
@@ -551,6 +578,24 @@ export default function SettingsPage() {
     }
   };
 
+  // 处理生成缩略图
+  const handleGenerateThumbnail = async () => {
+    setIsGeneratingThumbnail(true);
+    try {
+      const response = await generateThumbnail();
+      if (response.success) {
+        setSyncMessage(`缩略图生成任务已创建，任务ID: ${response.task_id}`);
+        fetchTasks();
+      } else {
+        setSyncMessage(`创建缩略图生成任务失败: ${response.message}`);
+      }
+    } catch (error) {
+      setSyncMessage(`创建缩略图生成任务失败: ${error}`);
+    } finally {
+      setIsGeneratingThumbnail(false);
+    }
+  };
+
   // 未登录时不显示内容（会被重定向）
   if (!isAuthenticated) {
     return (
@@ -603,16 +648,16 @@ export default function SettingsPage() {
             }
           >
             <div className="mt-4 md:mt-6 grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
-              {/* Server IP Card */}
+              {/* Server Status Card */}
               <Card className="border-none shadow-md">
                 <CardBody className="flex flex-row items-center gap-3 p-4">
                   <div className="p-2 rounded-xl bg-success/20">
                     <ServerIcon className="w-5 h-5 md:w-6 md:h-6 text-success" />
                   </div>
                   <div className="min-w-0">
-                    <p className="text-xs text-default-500 truncate">服务器IP</p>
+                    <p className="text-xs text-default-500 truncate">服务器状态</p>
                     <p className="text-sm md:text-lg font-bold">
-                      {serverStats?.server_ip || '未知'}
+                      {serverStats?.status || '未知'}
                     </p>
                   </div>
                 </CardBody>
@@ -899,6 +944,16 @@ export default function SettingsPage() {
                       同步文件
                     </Button>
                     <Button
+                      color="warning"
+                      size="sm"
+                      variant="flat"
+                      startContent={<ProcessIcon className="w-4 h-4" />}
+                      onPress={handleGenerateThumbnail}
+                      isLoading={isGeneratingThumbnail}
+                    >
+                      生成缩略图
+                    </Button>
+                    <Button
                       color="default"
                       size="sm"
                       variant="flat"
@@ -946,20 +1001,22 @@ export default function SettingsPage() {
                               <td className="p-4">
                                 <div className="flex items-center gap-3">
                                   <div className="p-2 rounded-lg bg-default-100">
-                                    {task.task_type === "upload" && <UploadIcon className="w-4 h-4 text-primary" />}
-                                    {task.task_type === "download" && <DownloadIcon className="w-4 h-4 text-success" />}
-                                    {task.task_type === "process" && <ProcessIcon className="w-4 h-4 text-warning" />}
-                                    {(task.task_type === "sync" || task.task_type === "sync_files") && <SyncIcon className="w-4 h-4 text-secondary" />}
+                                    {task.task_type === "sync_files" && <SyncIcon className="w-4 h-4 text-secondary" />}
+                                    {task.task_type === "generate_thumbnail" && <ImageIcon className="w-4 h-4 text-primary" />}
+                                    {task.task_type === "sync_directory" && <FolderIcon className="w-4 h-4 text-warning" />}
+                                    {task.task_type === "sync_database" && <DatabaseIcon className="w-4 h-4 text-success" />}
+                                    {task.task_type === "cleanup_orphaned_files" && <Trash2 className="w-4 h-4 text-danger" />}
                                   </div>
                                   <span className="font-medium">{task.id}</span>
                                 </div>
                               </td>
                               <td className="p-4">
                                 <Chip size="sm" variant="flat" color="default">
-                                  {task.task_type === "upload" && "上传"}
-                                  {task.task_type === "download" && "下载"}
-                                  {task.task_type === "process" && "处理"}
-                                  {(task.task_type === "sync" || task.task_type === "sync_files") && "同步"}
+                                  {task.task_type === "sync_files" && "同步文件"}
+                                  {task.task_type === "generate_thumbnail" && "生成缩略图"}
+                                  {task.task_type === "sync_directory" && "同步目录"}
+                                  {task.task_type === "sync_database" && "同步数据库"}
+                                  {task.task_type === "cleanup_orphaned_files" && "清理孤立文件"}
                                 </Chip>
                               </td>
                               <td className="p-4">
@@ -1110,7 +1167,7 @@ export default function SettingsPage() {
                 <Card className="border-none shadow-md">
                   <CardBody>
                     <div className="flex items-center gap-3">
-                      <Info className="w-5 h-5 text-primary" />
+                      <AlertCircle className="w-5 h-5 text-primary" />
                       <div>
                         <p className="font-medium text-sm md:text-base">本地保存</p>
                         <p className="text-xs text-default-500">所有设置和偏好均保存在本地设备上</p>

@@ -93,7 +93,8 @@ fn is_dangerous_extension(filename: &str) -> bool {
     false
 }
 
-/// 检查路径是否包含路径遍历攻击
+/// 检查路径是否安全（允许绝对路径和相对路径）
+/// 绝对路径必须不能包含路径遍历攻击
 fn is_path_safe(path: &str) -> bool {
     // 不允许空路径
     if path.is_empty() {
@@ -105,12 +106,10 @@ fn is_path_safe(path: &str) -> bool {
         return false;
     }
 
-    // 不允许绝对路径
-    if path.starts_with('/') {
-        return false;
-    }
-
-    // 不允许 Windows 风格的绝对路径
+    // 允许绝对路径（如 /home/user/files）
+    // 允许相对路径（如 uploads/, subdir/files）
+    
+    // 不允许 Windows 风格的绝对路径（如 C:\）
     if path.len() > 2 && path.chars().nth(1) == Some(':') {
         return false;
     }
@@ -617,6 +616,7 @@ pub async fn trigger_sync_files(
         tracing::warn!(user_id = member_id, path = %path, "Invalid sync path rejected");
         return Ok(Json(TriggerSyncResponse {
             success: false,
+            task_id: 0,
             message: "Invalid path".to_string(),
         }));
     }
@@ -639,12 +639,14 @@ pub async fn trigger_sync_files(
     match state.sync_task_sender.send(payload).await {
         Ok(()) => Ok(Json(TriggerSyncResponse {
             success: true,
+            task_id: 0,
             message: "Task queued successfully".to_string(),
         })),
         Err(e) => {
             tracing::error!(error = ?e, user_id = member_id, "Failed to queue task");
             Ok(Json(TriggerSyncResponse {
                 success: false,
+                task_id: 0,
                 message: "Failed to queue task".to_string(),
             }))
         }
@@ -832,6 +834,82 @@ pub async fn sync_files(
                 success: false,
                 task_id: 0,
                 message: "创建同步任务失败".to_string(),
+            }))
+        }
+    }
+}
+
+/// 触发视频缩略图生成任务 - 需要认证
+pub async fn trigger_thumbnail_generation(
+    State(state): State<Arc<AppState>>,
+    auth: Authorized,
+) -> crate::error::Result<Json<TriggerSyncResponse>> {
+    use sea_orm::{ActiveModelTrait, Set};
+    use store::entity::task_messages::TaskStatus;
+
+    let member_id = auth.user_id();
+    let db = &state.conn;
+    let storage_root = state.config.storage.volume.clone();
+
+    // 创建任务负载
+    let payload = services::TaskPayload {
+        task_type: "generate_thumbnail".to_string(),
+        member_id,
+        path: storage_root,
+        options: None,
+        task_message_id: None,
+    };
+
+    // 将任务负载序列化为 JSON
+    let payload_json = serde_json::to_string(&payload)
+        .map_err(|e| services::ServiceError::Other(e.to_string()))
+        .unwrap_or_else(|_| "{}".to_string());
+
+    // 创建任务消息记录
+    let task_message = store::entity::task_messages::ActiveModel {
+        member_id: Set(member_id),
+        message_type: Set("generate_thumbnail".to_string()),
+        status: Set(TaskStatus::Pending.as_str().to_string()),
+        progress: Set(0),
+        payload: Set(payload_json),
+        error_message: Set(None),
+        created_at: Set(Utc::now()),
+        updated_at: Set(Utc::now()),
+        completed_at: Set(None),
+        ..Default::default()
+    };
+
+    // 保存到数据库
+    let result = task_message.insert(db).await;
+
+    match result {
+        Ok(task) => {
+            // 发送任务到任务队列
+            let mut payload = payload;
+            payload.task_message_id = Some(task.id);
+
+            match state.sync_task_sender.send(payload).await {
+                Ok(()) => Ok(Json(TriggerSyncResponse {
+                    success: true,
+                    task_id: task.id,
+                    message: "缩略图生成任务已创建".to_string(),
+                })),
+                Err(e) => {
+                    tracing::error!(error = ?e, task_id = task.id, "Task created but failed to send to queue");
+                    Ok(Json(TriggerSyncResponse {
+                        success: false,
+                        task_id: task.id,
+                        message: "任务已创建但发送到队列失败".to_string(),
+                    }))
+                }
+            }
+        }
+        Err(e) => {
+            tracing::error!(error = ?e, user_id = member_id, "Failed to create thumbnail task");
+            Ok(Json(TriggerSyncResponse {
+                success: false,
+                task_id: 0,
+                message: "创建缩略图生成任务失败".to_string(),
             }))
         }
     }

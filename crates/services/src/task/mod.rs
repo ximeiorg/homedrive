@@ -15,8 +15,10 @@ use store::entity::task_messages::{
 use tracing::{debug, error, info};
 
 pub(crate) mod sync_file;
+pub mod thumbnail;
 
 pub use sync_file::SyncFilesHandler;
+pub use thumbnail::GenerateThumbnailHandler;
 
 /// 任务类型枚举
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

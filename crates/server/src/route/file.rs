@@ -3,7 +3,10 @@
 //! 定义所有文件相关的路由
 
 use crate::{
-    handler::file::{check_file_hash_exists, list_files, serve_file, sync_files, upload_file},
+    handler::file::{
+        check_file_hash_exists, list_files, serve_file, sync_files,
+        trigger_thumbnail_generation, upload_file,
+    },
     state::AppState,
 };
 use axum::{
@@ -25,6 +28,7 @@ pub fn file_router() -> Router<Arc<AppState>> {
         )
         .route("/", get(list_files))
         .route("/sync", post(sync_files))
+        .route("/thumbnail", post(trigger_thumbnail_generation))
 }
 
 /// 创建静态文件路由
