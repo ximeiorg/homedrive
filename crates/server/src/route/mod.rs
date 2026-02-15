@@ -9,7 +9,6 @@ mod member;
 mod task;
 
 use crate::{
-    frontend::index_handler,
     handler::{
         member::{check_members_empty, check_username_exists, init_admin},
         system::get_system_stats,
@@ -20,14 +19,11 @@ pub use album::album_router;
 pub use auth::auth_router;
 use axum::{
     Router,
-    body::Body,
-    extract::Path,
-    response::IntoResponse,
     routing::{get, post},
 };
 pub use file::{file_router, static_router};
 use hyper::header::{ACCEPT, AUTHORIZATION, CONTENT_TYPE};
-use hyper::{Method, Response};
+use hyper::Method;
 pub use member::member_router;
 use std::sync::Arc;
 pub use task::task_router;

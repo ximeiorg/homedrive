@@ -1,4 +1,4 @@
-use sea_orm_migration::{prelude::*, schema::*};
+use sea_orm_migration::prelude::*;
 
 #[derive(DeriveMigrationName)]
 pub struct Migration;
@@ -34,21 +34,16 @@ impl MigrationTrait for Migration {
             .ok();
 
         // For SQLite, we use a check constraint
-        // For PostgreSQL, we would use an enum type
-        #[cfg(feature = "sqlx-sqlite")]
-        {
-            manager
-                .get_connection()
-                .execute_unprepared(
-                    r#"
+        manager
+            .get_connection()
+            .execute_unprepared(
+                r#"
                     ALTER TABLE members ADD CONSTRAINT chk_role_check 
                     CHECK (role IN ('admin', 'user'));
                     "#,
-                )
-                .await
-                .ok();
-        }
-
+            )
+            .await
+            .ok();
         Ok(())
     }
 

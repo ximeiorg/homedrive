@@ -89,7 +89,7 @@ fn get_server_ip(host: &str, port: u16) -> String {
     }
 
     // 如果 host 是域名或 IP，尝试解析
-    let addr_string = format!("{}:{}", host, port);
+    let addr_string = format!("{host}:{port}");
     if let Ok(mut addrs) = addr_string.as_str().to_socket_addrs() {
         if let Some(addr) = addrs.next() {
             return addr.ip().to_string();

@@ -86,7 +86,7 @@ fn is_mime_type_allowed(mime_type: &str) -> bool {
 fn is_dangerous_extension(filename: &str) -> bool {
     let filename_lower = filename.to_lowercase();
     for ext in DANGEROUS_EXTENSIONS {
-        if filename_lower.ends_with(&format!(".{}", ext)) {
+        if filename_lower.ends_with(&format!(".{ext}")) {
             return true;
         }
     }

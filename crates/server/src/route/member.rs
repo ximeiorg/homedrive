@@ -4,7 +4,7 @@
 
 use crate::{
     handler::member::{
-        check_username_exists, create_member, delete_member, get_member, get_member_by_username,
+        create_member, delete_member, get_member, get_member_by_username,
         list_members, update_member, update_member_avatar, update_member_password,
         update_member_role,
     },

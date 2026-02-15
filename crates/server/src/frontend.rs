@@ -3,12 +3,10 @@
 //! 使用 rust-embed 将构建后的前端资源嵌入到二进制文件中
 
 use axum::{
-    body::Body,
-    extract::Request,
     http::{StatusCode, Uri, header},
     response::{IntoResponse, Response},
 };
-use rust_embed::{EmbeddedFile, RustEmbed};
+use rust_embed::RustEmbed;
 
 /// 前端静态资源
 #[derive(RustEmbed)]
