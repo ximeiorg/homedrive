@@ -33,18 +33,15 @@ where
         match content {
             Some(data) => {
                 let mime = mime_guess::from_path(&path).first_or_octet_stream();
-                println!("[Static] Found: {}, mime: {}", path, mime);
                 ([(header::CONTENT_TYPE, mime.as_ref())], data.data).into_response()
             }
             None => {
                 // 如果是静态资源且找不到，返回 404
                 if is_static_asset {
-                    println!("[Static] Not found: {}", path);
                     return (StatusCode::NOT_FOUND, "Not Found").into_response();
                 }
 
                 // 否则返回 index.html 用于 SPA 路由
-                println!("[Static] Serving index.html for route: {}", path);
                 let index_path = "index.html";
                 if let Some(index_data) = FrontendAssets::get(index_path) {
                     let mime = mime_guess::from_path(index_path).first_or_octet_stream();
