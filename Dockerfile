@@ -35,6 +35,7 @@ WORKDIR /app
 # 复制 Cargo 配置
 COPY Cargo.toml Cargo.lock ./
 COPY rust-toolchain.toml ./
+COPY default.toml ./
 
 # 复制 crates
 COPY crates/ ./crates/
