@@ -39,6 +39,9 @@ COPY rust-toolchain.toml ./
 # 复制 crates
 COPY crates/ ./crates/
 
+# 复制前端构建资源 (供 rust-embed 使用)
+COPY --from=frontend-builder /app/web/build/client ./web/build/client
+
 # 构建后端 (静态链接)
 RUN cargo build --release --target $TARGET --bin homedrive
 
