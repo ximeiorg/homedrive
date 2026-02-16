@@ -1,0 +1,26 @@
+services:
+  homedrive:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: homedrive
+    ports:
+      - "2300:2300"
+    volumes:
+      - ./uploads:/app/uploads
+      - ./homedrive.db:/app/homedrive.db
+    environment:
+      - RUST_LOG=info
+      - APP_CONFIG__JWT__SECRET=${JWT_SECRET:-your-secret-key-change-in-production}
+      - HOMEDRIVE_STORAGE__VOLUME=/app/uploads
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:2300/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+# 可选：如果需要持久化配置
+# volumes:
+#   config:

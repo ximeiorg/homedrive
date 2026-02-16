@@ -109,9 +109,9 @@ pub async fn generate_thumbnail(
 
     // 添加视频缩放参数
     if let Some(width) = config.width {
-        cmd.arg("-vf").arg(format!("scale={}:-1", width));
+        cmd.arg("-vf").arg(format!("scale={width}:-1"));
     } else if let Some(height) = config.height {
-        cmd.arg("-vf").arg(format!("scale=-1:{}", height));
+        cmd.arg("-vf").arg(format!("scale=-1:{height}"));
     }
 
     // 添加质量参数

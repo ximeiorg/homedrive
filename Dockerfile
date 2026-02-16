@@ -46,10 +46,10 @@ COPY --from=frontend-builder /app/web/build/client ./web/build/client
 # 构建后端 (静态链接)
 RUN cargo build --release --target $TARGET --bin homedrive
 
-# ========== 阶段 3: 运行镜像
+# ========== 阶段 4: 运行镜像
 FROM alpine:3.20 AS runner
 
-# 安装运行时依赖 (musl 静态链接只需要 ca-certificates)
+# 安装运行时依赖
 RUN apk add --no-cache ca-certificates
 
 # 创建非 root 用户
@@ -73,3 +73,4 @@ EXPOSE 2300
 
 # 启动命令
 CMD ["./homedrive"]
+

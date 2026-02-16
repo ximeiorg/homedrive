@@ -390,6 +390,8 @@ pub async fn serve_file(
     file_path_buf.push(&storage_tag);
     file_path_buf.push(&file_path);
 
+    println!("{:?}",file_path_buf);
+
     // 规范化路径并检查是否仍在允许的目录内
     let canonical_path = match file_path_buf.canonicalize() {
         Ok(p) => p,

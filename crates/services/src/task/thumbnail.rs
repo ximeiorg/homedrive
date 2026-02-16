@@ -209,7 +209,7 @@ impl TaskHandler for GenerateThumbnailHandler {
             let thumbnail_dir = video_dir.join(".thumbnail");
             
             // 缩略图文件名与视频名称一致（加上 .jpg 后缀）
-            let thumbnail_filename = format!("{}.jpg", video_file_stem);
+            let thumbnail_filename = format!("{video_file_stem}.jpg");
             let thumbnail_path = thumbnail_dir.join(&thumbnail_filename);
 
             // 确保 .thumbnail 目录存在

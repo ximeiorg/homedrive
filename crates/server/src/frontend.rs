@@ -72,6 +72,5 @@ async fn handler_404(uri: Uri) -> impl IntoResponse {
         processed_path
     };
 
-    println!("[Handler] uri: {} -> path: {}", uri.path(), final_path);
     StaticFile(final_path)
 }
