@@ -3,19 +3,64 @@ package com.kingzcheung.homedrive.data.repository
 import com.kingzcheung.homedrive.data.api.HomedriveApi
 import com.kingzcheung.homedrive.data.local.PreferencesManager
 import com.kingzcheung.homedrive.data.model.*
+import com.kingzcheung.homedrive.di.AppContainer
 import kotlinx.coroutines.flow.first
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.MultipartBody
+import okhttp3.OkHttpClient
 import okhttp3.RequestBody.Companion.asRequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
+import okhttp3.logging.HttpLoggingInterceptor
+import retrofit2.Retrofit
+import retrofit2.converter.gson.GsonConverterFactory
 import java.io.File
+import java.util.concurrent.TimeUnit
 
 class AuthRepository(
-    private val api: HomedriveApi,
     private val preferencesManager: PreferencesManager
 ) {
+    /**
+     * 创建临时 API 实例用于登录
+     * 登录时需要使用用户指定的服务器地址
+     */
+    private fun createApi(serverUrl: String): HomedriveApi {
+        val loggingInterceptor = HttpLoggingInterceptor().apply {
+            level = HttpLoggingInterceptor.Level.HEADERS
+        }
+
+        val client = OkHttpClient.Builder()
+            .addInterceptor(loggingInterceptor)
+            .connectTimeout(30, TimeUnit.SECONDS)
+            .readTimeout(30, TimeUnit.SECONDS)
+            .writeTimeout(60, TimeUnit.SECONDS)
+            .build()
+
+        val retrofit = Retrofit.Builder()
+            .baseUrl("$serverUrl/api/")
+            .client(client)
+            .addConverterFactory(GsonConverterFactory.create())
+            .build()
+
+        return retrofit.create(HomedriveApi::class.java)
+    }
+    
+    /**
+     * 获取已保存的服务器地址对应的 API 实例
+     */
+    private suspend fun getSavedApi(): HomedriveApi? {
+        val serverUrl = preferencesManager.serverUrl.first()
+        return if (serverUrl.isNotEmpty()) {
+            createApi(serverUrl)
+        } else {
+            null
+        }
+    }
+    
     suspend fun login(serverUrl: String, username: String, password: String): Result<LoginResponse> {
         return try {
+            // 使用用户指定的服务器地址创建 API
+            val api = createApi(serverUrl)
+            
             val request = LoginRequest(serverUrl, username, password)
             val response = api.login(request)
             if (response.isSuccessful) {
@@ -29,7 +74,8 @@ class AuthRepository(
                     Result.success(loginResponse)
                 } ?: Result.failure(Exception("Empty response"))
             } else {
-                Result.failure(Exception("Login failed: ${response.message()}"))
+                val errorBody = response.errorBody()?.string() ?: "Unknown error"
+                Result.failure(Exception("登录失败: ${response.code()} - $errorBody"))
             }
         } catch (e: Exception) {
             Result.failure(e)
@@ -38,7 +84,7 @@ class AuthRepository(
 
     suspend fun logout() {
         try {
-            api.logout()
+            getSavedApi()?.logout()
         } catch (_: Exception) {
             // Ignore errors during logout
         }
@@ -62,6 +108,7 @@ class AuthRepository(
 
     suspend fun getCurrentUser(): Result<User> {
         return try {
+            val api = getSavedApi() ?: return Result.failure(Exception("未登录或服务器地址未设置"))
             val response = api.getCurrentUser()
             if (response.isSuccessful) {
                 response.body()?.let {
@@ -77,6 +124,7 @@ class AuthRepository(
 
     suspend fun updatePassword(oldPassword: String, newPassword: String): Result<Unit> {
         return try {
+            val api = getSavedApi() ?: return Result.failure(Exception("未登录或服务器地址未设置"))
             val map = mapOf("old_password" to oldPassword, "new_password" to newPassword)
             val response = api.updatePassword(map)
             if (response.isSuccessful) {

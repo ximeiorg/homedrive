@@ -58,13 +58,21 @@ fun HomeScreen(
     val view = LocalView.current
 
     // 启用边缘到边缘显示
-    DisposableEffect(Unit) {
+    val darkTheme = androidx.compose.foundation.isSystemInDarkTheme()
+    DisposableEffect(darkTheme) {
         val window = (context as? android.app.Activity)?.window
         window?.let {
             WindowCompat.setDecorFitsSystemWindows(it, false)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                // 在暗黑模式下，状态栏内容使用浅色（白色）
+                // 在亮色模式下，状态栏内容使用深色（黑色）
+                val appearance = if (darkTheme) {
+                    0 // 清除 APPEARANCE_LIGHT_STATUS_BARS，使用浅色内容
+                } else {
+                    android.view.WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS
+                }
                 it.insetsController?.setSystemBarsAppearance(
-                    android.view.WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS,
+                    appearance,
                     android.view.WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS
                 )
             }
@@ -413,13 +421,20 @@ private fun FloatingBottomNavBar(
     currentDestination: androidx.navigation.NavDestination?,
     onNavigate: (Screen) -> Unit
 ) {
+    // 在暗黑模式下使用更浅的背景色，以便与 app 背景区分开
+    val navBarColor = if (androidx.compose.foundation.isSystemInDarkTheme()) {
+        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.95f)
+    } else {
+        MaterialTheme.colorScheme.surface.copy(alpha = 0.95f)
+    }
+    
     Surface(
         modifier = Modifier
             .padding(bottom = 16.dp)
             .height(44.dp)
             .fillMaxWidth(0.45f),
         shape = RoundedCornerShape(22.dp),
-        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f),
+        color = navBarColor,
         tonalElevation = 8.dp,
         shadowElevation = 8.dp
     ) {

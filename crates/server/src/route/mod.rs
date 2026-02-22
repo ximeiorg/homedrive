@@ -11,7 +11,7 @@ mod task;
 use crate::{
     handler::{
         member::{check_members_empty, check_username_exists, init_admin},
-        system::get_system_stats,
+        system::{get_system_stats, health_check},
     },
     state::AppState,
 };
@@ -71,6 +71,7 @@ pub fn routes(state: &Arc<AppState>) -> Router<Arc<AppState>> {
 
     Router::new()
         // 公开路由
+        .route("/health", get(health_check))
         .route("/username/{username}/exists", get(check_username_exists))
         .route("/empty", get(check_members_empty))
         .route("/init", post(init_admin))

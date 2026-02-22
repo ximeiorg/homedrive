@@ -21,10 +21,7 @@ data class GalleryUiState(
 )
 
 class GalleryViewModel(
-    private val fileRepository: FileRepository = FileRepository(
-        com.kingzcheung.homedrive.di.AppContainer.getApi(),
-        com.kingzcheung.homedrive.di.AppContainer.getPreferencesManager()
-    )
+    private val fileRepository: FileRepository
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(GalleryUiState())
     val uiState: StateFlow<GalleryUiState> = _uiState.asStateFlow()

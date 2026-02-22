@@ -11,6 +11,23 @@ use std::net::ToSocketAddrs;
 use std::sync::Arc;
 use sysinfo::{Disks, System};
 
+/// 健康检查响应（公开端点，用于网络扫描发现）
+#[derive(Serialize)]
+pub struct HealthResponse {
+    pub status: String,
+    pub service: String,
+    pub version: String,
+}
+
+/// 健康检查端点（公开访问，无需认证）
+pub async fn health_check() -> Json<HealthResponse> {
+    Json(HealthResponse {
+        status: "ok".to_string(),
+        service: "homedrive".to_string(),
+        version: env!("CARGO_PKG_VERSION").to_string(),
+    })
+}
+
 /// 系统状态响应
 #[derive(Serialize)]
 pub struct SystemStatsResponse {

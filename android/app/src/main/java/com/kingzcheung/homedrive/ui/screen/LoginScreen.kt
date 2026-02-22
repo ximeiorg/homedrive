@@ -1,6 +1,10 @@
 package com.kingzcheung.homedrive.ui.screen
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -22,6 +26,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.kingzcheung.homedrive.R
+import com.kingzcheung.homedrive.data.network.DiscoveredServer
 import com.kingzcheung.homedrive.ui.viewmodel.LoginViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -95,26 +100,10 @@ fun LoginScreen(
                     modifier = Modifier.padding(24.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    // Server URL Input
-                    LoginTextField(
-                        value = uiState.serverUrl,
-                        onValueChange = viewModel::updateServerUrl,
-                        placeholder = "服务器地址",
-                        leadingIcon = {
-                            Icon(
-                                Icons.Default.Link,
-                                contentDescription = null,
-                                modifier = Modifier.size(20.dp)
-                            )
-                        },
-                        keyboardOptions = KeyboardOptions(
-                            keyboardType = KeyboardType.Uri,
-                            imeAction = ImeAction.Next
-                        ),
-                        keyboardActions = KeyboardActions(
-                            onNext = { focusManager.moveFocus(FocusDirection.Down) }
-                        ),
-                        isError = uiState.error?.contains("服务器") == true
+                    // 服务器选择区域
+                    ServerSelectionSection(
+                        uiState = uiState,
+                        viewModel = viewModel
                     )
 
                     Spacer(modifier = Modifier.height(16.dp))
@@ -244,6 +233,201 @@ fun LoginScreen(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ServerSelectionSection(
+    uiState: com.kingzcheung.homedrive.ui.viewmodel.LoginUiState,
+    viewModel: LoginViewModel
+) {
+    var showDropdown by remember { mutableStateOf(false) }
+    
+    Column(modifier = Modifier.fillMaxWidth()) {
+        // 扫描状态显示
+        if (uiState.isScanning) {
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(24.dp),
+                color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(20.dp),
+                            strokeWidth = 2.dp,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Text(
+                            text = "正在扫描局域网服务器...",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    LinearProgressIndicator(
+                        progress = { if (uiState.scanTotal > 0) uiState.scanProgress.toFloat() / uiState.scanTotal else 0f },
+                        modifier = Modifier.fillMaxWidth(),
+                        color = MaterialTheme.colorScheme.primary,
+                        trackColor = MaterialTheme.colorScheme.surfaceVariant
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "${uiState.scanProgress}/${uiState.scanTotal}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        } else if (uiState.discoveredServers.isNotEmpty() && !uiState.isManualInput) {
+            // 发现了服务器，显示下拉选择
+            ExposedDropdownMenuBox(
+                expanded = showDropdown,
+                onExpandedChange = { showDropdown = it }
+            ) {
+                LoginTextField(
+                    value = uiState.serverUrl,
+                    onValueChange = { },
+                    placeholder = "选择服务器",
+                    leadingIcon = {
+                        Icon(
+                            Icons.Default.Dns,
+                            contentDescription = null,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    },
+                    trailingIcon = {
+                        IconButton(onClick = { viewModel.startNetworkScan() }) {
+                            Icon(
+                                Icons.Default.Refresh,
+                                contentDescription = "重新扫描",
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                    },
+                    modifier = Modifier
+                        .menuAnchor()
+                        .fillMaxWidth(),
+                    enabled = false,
+                    isError = uiState.error?.contains("服务器") == true
+                )
+                
+                ExposedDropdownMenu(
+                    expanded = showDropdown,
+                    onDismissRequest = { showDropdown = false }
+                ) {
+                    // 已发现的服务器列表
+                    uiState.discoveredServers.forEach { server ->
+                        DropdownMenuItem(
+                            text = {
+                                Column {
+                                    Text(
+                                        text = server.displayName,
+                                        style = MaterialTheme.typography.bodyLarge
+                                    )
+                                    Text(
+                                        text = server.fullUrl,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            },
+                            onClick = {
+                                viewModel.selectServer(server)
+                                showDropdown = false
+                            },
+                            leadingIcon = {
+                                Icon(
+                                    Icons.Default.Dns,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                        )
+                    }
+                    
+                    // 手动输入选项
+                    HorizontalDivider()
+                    DropdownMenuItem(
+                        text = {
+                            Text(
+                                text = "手动输入服务器地址",
+                                style = MaterialTheme.typography.bodyLarge
+                            )
+                        },
+                        onClick = {
+                            viewModel.selectManualInput()
+                            showDropdown = false
+                        },
+                        leadingIcon = {
+                            Icon(
+                                Icons.Default.Edit,
+                                contentDescription = null,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                    )
+                }
+            }
+        } else {
+            // 手动输入模式或未发现服务器
+            LoginTextField(
+                value = uiState.serverUrl,
+                onValueChange = viewModel::updateServerUrl,
+                placeholder = "服务器地址 (例如: http://192.168.1.100:2300)",
+                leadingIcon = {
+                    Icon(
+                        Icons.Default.Link,
+                        contentDescription = null,
+                        modifier = Modifier.size(20.dp)
+                    )
+                },
+                trailingIcon = {
+                    IconButton(onClick = { viewModel.startNetworkScan() }) {
+                        Icon(
+                            Icons.Default.Search,
+                            contentDescription = "扫描网络",
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                },
+                keyboardOptions = KeyboardOptions(
+                    keyboardType = KeyboardType.Uri,
+                    imeAction = ImeAction.Next
+                ),
+                isError = uiState.error?.contains("服务器") == true
+            )
+            
+            // 提示信息
+            if (uiState.discoveredServers.isEmpty() && !uiState.isScanning) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        Icons.Default.Info,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "未发现局域网服务器，请手动输入地址",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        }
+    }
+}
+
 @Composable
 private fun LoginTextField(
     value: String,
@@ -255,13 +439,16 @@ private fun LoginTextField(
     visualTransformation: VisualTransformation = VisualTransformation.None,
     keyboardOptions: KeyboardOptions = KeyboardOptions.Default,
     keyboardActions: KeyboardActions = KeyboardActions.Default,
-    isError: Boolean = false
+    isError: Boolean = false,
+    enabled: Boolean = true
 ) {
     Surface(
         modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(24.dp),
         color = if (isError) {
             MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.3f)
+        } else if (!enabled) {
+            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
         } else {
             MaterialTheme.colorScheme.surface
         }
@@ -296,7 +483,8 @@ private fun LoginTextField(
                     visualTransformation = visualTransformation,
                     keyboardOptions = keyboardOptions,
                     keyboardActions = keyboardActions,
-                    singleLine = true
+                    singleLine = true,
+                    enabled = enabled
                 )
             }
             trailingIcon()

@@ -93,7 +93,15 @@ fun HomedriveTheme(
             val window = (view.context as Activity).window
             // 状态栏透明，让内容延伸到状态栏区域
             window.statusBarColor = android.graphics.Color.TRANSPARENT
-            WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = !darkTheme
+            
+            val windowInsetsController = WindowCompat.getInsetsController(window, view)
+            // isAppearanceLightStatusBars: 
+            // - true = 状态栏内容使用深色（适用于浅色背景）
+            // - false = 状态栏内容使用浅色（适用于深色背景）
+            // 在暗黑模式下，背景是深色的，需要浅色状态栏内容，所以设置为 false
+            // 在亮色模式下，背景是浅色的，需要深色状态栏内容，所以设置为 true
+            windowInsetsController.isAppearanceLightStatusBars = !darkTheme
+            windowInsetsController.isAppearanceLightNavigationBars = !darkTheme
         }
     }
 

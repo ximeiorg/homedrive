@@ -4,6 +4,7 @@ import android.content.Context
 import android.util.Log
 import com.kingzcheung.homedrive.data.api.HomedriveApi
 import com.kingzcheung.homedrive.data.local.PreferencesManager
+import com.kingzcheung.homedrive.data.network.NetworkScanner
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import okhttp3.OkHttpClient
@@ -20,7 +21,7 @@ object AppContainer {
     
     private lateinit var applicationContext: Context
     private var preferencesManager: PreferencesManager? = null
-    private var api: HomedriveApi? = null
+    private var networkScanner: NetworkScanner? = null
 
     fun initialize(context: Context) {
         applicationContext = context.applicationContext
@@ -33,17 +34,20 @@ object AppContainer {
         return preferencesManager!!
     }
 
-    fun getBaseUrl(): String {
-        return runBlocking {
-            val prefs = getPreferencesManager()
-            prefs.serverUrl.first().ifEmpty { "http://192.168.77.58:2300" }
-        }
+    /**
+     * 获取已保存的服务器地址
+     */
+    suspend fun getBaseUrl(): String {
+        val prefs = getPreferencesManager()
+        return prefs.serverUrl.first()
     }
 
-    fun getOkHttpClient(): OkHttpClient {
+    /**
+     * 创建带认证拦截器的 OkHttpClient
+     */
+    fun createOkHttpClient(): OkHttpClient {
         val preferencesManager = getPreferencesManager()
         val loggingInterceptor = HttpLoggingInterceptor().apply {
-            // 使用 HEADERS 级别避免输出大量文件内容（图片等二进制数据）
             level = HttpLoggingInterceptor.Level.HEADERS
         }
 
@@ -56,52 +60,75 @@ object AppContainer {
             .build()
     }
 
-    fun getRetrofit(): Retrofit {
-        return Retrofit.Builder()
-            .baseUrl("${getBaseUrl()}/api/")
-            .client(getOkHttpClient())
+    /**
+     * 创建 API 实例
+     * 必须在登录后调用，此时服务器地址已保存
+     */
+    fun createApi(): HomedriveApi {
+        val baseUrl = runBlocking { getBaseUrl() }
+        if (baseUrl.isEmpty()) {
+            throw IllegalStateException("服务器地址未设置，请先登录")
+        }
+        
+        val retrofit = Retrofit.Builder()
+            .baseUrl("$baseUrl/api/")
+            .client(createOkHttpClient())
             .addConverterFactory(GsonConverterFactory.create())
             .build()
-    }
 
-    fun getApi(): HomedriveApi {
-        if (api == null) {
-            api = getRetrofit().create(HomedriveApi::class.java)
-        }
-        return api!!
+        return retrofit.create(HomedriveApi::class.java)
     }
 
     /**
      * 获取带认证 token 的静态资源 URL
      * @param urlOrPath 服务器返回的 URL（可能是完整 URL 或相对路径）
-     * @return 带有 token 参数的完整 URL
+     * @return 带有 token 参数的完整 URL，使用用户配置的服务器地址
      */
     suspend fun getStaticUrl(urlOrPath: String): String {
         val prefs = getPreferencesManager()
         val token = prefs.token.first() ?: ""
+        val baseUrl = prefs.serverUrl.first()
         
-        Log.d(TAG, "getStaticUrl input: $urlOrPath")
+        Log.d(TAG, "getStaticUrl input: $urlOrPath, baseUrl: $baseUrl")
         
-        // 如果已经是完整的 URL，直接添加 token
-        val result = if (urlOrPath.startsWith("http://") || urlOrPath.startsWith("https://")) {
-            // 已经是完整 URL，检查是否已有查询参数
-            if (urlOrPath.contains("?")) {
-                "$urlOrPath&token=$token"
-            } else {
-                "$urlOrPath?token=$token"
-            }
-        } else {
-            // 相对路径，需要拼接 baseUrl
-            val baseUrl = prefs.serverUrl.first().ifEmpty { "http://192.168.77.58:2300" }
-            val path = if (urlOrPath.startsWith("/")) {
-                urlOrPath
-            } else {
-                "/$urlOrPath"
-            }
-            "$baseUrl/api/static$path?token=$token"
+        if (baseUrl.isEmpty()) {
+            Log.w(TAG, "getStaticUrl: No server URL configured")
+            return urlOrPath
         }
         
-        Log.d(TAG, "getStaticUrl result: $result")
-        return result
+        // 提取路径部分（去掉服务器地址）
+        val path = when {
+            // 完整 URL，提取路径部分
+            urlOrPath.startsWith("http://") || urlOrPath.startsWith("https://") -> {
+                // 从 http://xxx:port 后面提取路径
+                val afterProtocol = urlOrPath.substringAfter("://")
+                val pathStart = afterProtocol.indexOf('/')
+                if (pathStart >= 0) {
+                    afterProtocol.substring(pathStart)
+                } else {
+                    "/$urlOrPath"
+                }
+            }
+            // 相对路径，直接使用
+            urlOrPath.startsWith("/") -> urlOrPath
+            else -> "/$urlOrPath"
+        }
+        
+        // 使用用户配置的服务器地址构建完整 URL
+        val fullUrl = if (path.contains("?")) {
+            "$baseUrl$path&token=$token"
+        } else {
+            "$baseUrl$path?token=$token"
+        }
+        
+        Log.d(TAG, "getStaticUrl result: $fullUrl")
+        return fullUrl
+    }
+    
+    fun getNetworkScanner(): NetworkScanner {
+        if (networkScanner == null) {
+            networkScanner = NetworkScanner(applicationContext)
+        }
+        return networkScanner!!
     }
 }
