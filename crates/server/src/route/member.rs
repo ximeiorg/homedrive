@@ -4,9 +4,8 @@
 
 use crate::{
     handler::member::{
-        create_member, delete_member, get_member, get_member_by_username,
-        list_members, update_member, update_member_avatar, update_member_password,
-        update_member_role,
+        create_member, delete_member, get_member, get_member_by_username, list_members,
+        update_member, update_member_avatar, update_member_password, update_member_role,
     },
     state::AppState,
 };

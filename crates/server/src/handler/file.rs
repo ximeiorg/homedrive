@@ -108,7 +108,7 @@ fn is_path_safe(path: &str) -> bool {
 
     // 允许绝对路径（如 /home/user/files）
     // 允许相对路径（如 uploads/, subdir/files）
-    
+
     // 不允许 Windows 风格的绝对路径（如 C:\）
     if path.len() > 2 && path.chars().nth(1) == Some(':') {
         return false;
@@ -390,7 +390,7 @@ pub async fn serve_file(
     file_path_buf.push(&storage_tag);
     file_path_buf.push(&file_path);
 
-    println!("{:?}",file_path_buf);
+    println!("{file_path_buf:?}");
 
     // 规范化路径并检查是否仍在允许的目录内
     let canonical_path = match file_path_buf.canonicalize() {

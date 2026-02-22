@@ -4,8 +4,8 @@
 
 use crate::{
     handler::file::{
-        check_file_hash_exists, list_files, serve_file, sync_files,
-        trigger_thumbnail_generation, upload_file,
+        check_file_hash_exists, list_files, serve_file, sync_files, trigger_thumbnail_generation,
+        upload_file,
     },
     state::AppState,
 };

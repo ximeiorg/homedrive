@@ -5,8 +5,8 @@
 use std::path::Path;
 use std::process::Stdio;
 use thiserror::Error;
-use tokio::process::Command;
 use tokio::fs;
+use tokio::process::Command;
 
 /// 生成视频缩略图时发生的错误
 #[derive(Debug, Error)]
@@ -14,11 +14,11 @@ pub enum ThumbnailError {
     /// ffmpeg 命令执行失败
     #[error("ffmpeg 执行失败: {0}")]
     FfmpegFailed(String),
-    
+
     /// 输入文件不存在
     #[error("输入文件不存在: {0}")]
     InputFileNotFound(String),
-    
+
     /// IO 错误
     #[error("IO 错误: {0}")]
     IoError(#[from] std::io::Error),
@@ -91,7 +91,7 @@ pub async fn generate_thumbnail(
     // 检查输入文件是否存在
     if !video_path.exists() {
         return Err(ThumbnailError::InputFileNotFound(
-            video_path.display().to_string()
+            video_path.display().to_string(),
         ));
     }
 
@@ -102,10 +102,13 @@ pub async fn generate_thumbnail(
 
     // 构建 ffmpeg 命令
     let mut cmd = Command::new("ffmpeg");
-    cmd.arg("-y")  // 覆盖输出文件（如果存在）
-       .arg("-i").arg(video_path)  // 输入文件
-       .arg("-ss").arg("00:00:00")  // 从第一帧开始
-       .arg("-vframes").arg("1");  // 只取一帧
+    cmd.arg("-y") // 覆盖输出文件（如果存在）
+        .arg("-i")
+        .arg(video_path) // 输入文件
+        .arg("-ss")
+        .arg("00:00:00") // 从第一帧开始
+        .arg("-vframes")
+        .arg("1"); // 只取一帧
 
     // 添加视频缩放参数
     if let Some(width) = config.width {
@@ -144,10 +147,7 @@ pub async fn generate_thumbnail(
 
 /// 检查系统是否安装了 ffmpeg
 pub async fn check_ffmpeg() -> Result<bool, ThumbnailError> {
-    let output = Command::new("ffmpeg")
-        .arg("-version")
-        .output()
-        .await;
+    let output = Command::new("ffmpeg").arg("-version").output().await;
 
     Ok(output.is_ok())
 }

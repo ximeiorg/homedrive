@@ -3,12 +3,10 @@
 //! 扫描指定目录下的视频文件，为每个视频生成缩略图
 
 use crate::{Result, TaskHandler, TaskPayload};
-use sea_orm::{
-    ColumnTrait as _, DatabaseConnection, EntityTrait, QueryFilter,
-};
+use sea_orm::{ColumnTrait as _, DatabaseConnection, EntityTrait, QueryFilter};
 use std::path::Path;
 use std::sync::Arc;
-use thumbnail::{generate_thumbnail, ThumbnailConfig};
+use thumbnail::{ThumbnailConfig, generate_thumbnail};
 
 /// 进度更新节流配置
 const PROGRESS_UPDATE_INTERVAL: usize = 5; // 每处理 5 个文件更新一次进度
@@ -28,10 +26,7 @@ pub struct GenerateThumbnailHandler {
 }
 
 impl GenerateThumbnailHandler {
-    pub fn new(
-        storage_root: impl Into<String>,
-        conn: Arc<DatabaseConnection>,
-    ) -> Self {
+    pub fn new(storage_root: impl Into<String>, conn: Arc<DatabaseConnection>) -> Self {
         Self {
             storage_root: storage_root.into(),
             conn,
@@ -88,7 +83,11 @@ impl GenerateThumbnailHandler {
     }
 
     /// 更新文件的缩略图路径到数据库
-    async fn update_file_thumbnail(&self, file_content_id: i64, thumbnail_path: &str) -> Result<()> {
+    async fn update_file_thumbnail(
+        &self,
+        file_content_id: i64,
+        thumbnail_path: &str,
+    ) -> Result<()> {
         let active_model = store::entity::file_contents::ActiveModel {
             id: sea_orm::Set(file_content_id),
             thumbnail: sea_orm::Set(Some(thumbnail_path.to_string())),
@@ -99,7 +98,11 @@ impl GenerateThumbnailHandler {
             .exec(&*self.conn)
             .await?;
 
-        tracing::debug!("Updated thumbnail path for file_content {}: {}", file_content_id, thumbnail_path);
+        tracing::debug!(
+            "Updated thumbnail path for file_content {}: {}",
+            file_content_id,
+            thumbnail_path
+        );
         Ok(())
     }
 }
@@ -197,17 +200,17 @@ impl TaskHandler for GenerateThumbnailHandler {
 
             // 视频文件的完整路径
             let video_path = Path::new(&handler.storage_root).join(&content.storage_path);
-            
+
             // 获取视频文件所在的目录和文件名
             let video_dir = video_path.parent().unwrap_or(Path::new(""));
             let video_file_stem = Path::new(&member_file.file_name)
                 .file_stem()
                 .and_then(|s| s.to_str())
                 .unwrap_or(&member_file.file_name);
-            
+
             // 创建 .thumbnail 子目录（与视频文件在同一目录）
             let thumbnail_dir = video_dir.join(".thumbnail");
-            
+
             // 缩略图文件名与视频名称一致（加上 .jpg 后缀）
             let thumbnail_filename = format!("{video_file_stem}.jpg");
             let thumbnail_path = thumbnail_dir.join(&thumbnail_filename);
@@ -223,26 +226,26 @@ impl TaskHandler for GenerateThumbnailHandler {
             }
 
             // 生成缩略图
-            match generate_thumbnail(
-                &video_path,
-                &thumbnail_path,
-                ThumbnailConfig::default(),
-            ).await {
+            match generate_thumbnail(&video_path, &thumbnail_path, ThumbnailConfig::default()).await
+            {
                 Ok(_) => {
                     tracing::info!("生成缩略图成功: {}", thumbnail_filename);
-                    
+
                     // 计算相对路径（相对于存储根目录）
                     let relative_thumbnail_path = thumbnail_path
                         .strip_prefix(&handler.storage_root)
                         .unwrap_or(&thumbnail_path)
                         .to_string_lossy()
                         .to_string();
-                    
+
                     // 更新数据库中的缩略图路径
-                    if let Err(e) = handler.update_file_thumbnail(content.id, &relative_thumbnail_path).await {
+                    if let Err(e) = handler
+                        .update_file_thumbnail(content.id, &relative_thumbnail_path)
+                        .await
+                    {
                         tracing::error!("更新缩略图路径失败: {}", e);
                     }
-                    
+
                     success_count += 1;
                 }
                 Err(e) => {
@@ -253,7 +256,9 @@ impl TaskHandler for GenerateThumbnailHandler {
 
             // 更新进度
             handler.processed_count += 1;
-            if handler.processed_count % PROGRESS_UPDATE_INTERVAL == 0 || handler.processed_count == handler.total_count {
+            if handler.processed_count % PROGRESS_UPDATE_INTERVAL == 0
+                || handler.processed_count == handler.total_count
+            {
                 let progress = if handler.total_count > 0 {
                     (handler.processed_count as f64 / handler.total_count as f64 * 100.0) as i64
                 } else {
