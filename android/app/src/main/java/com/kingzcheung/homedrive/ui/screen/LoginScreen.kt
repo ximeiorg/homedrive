@@ -16,6 +16,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
@@ -37,6 +38,8 @@ fun LoginScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val focusManager = LocalFocusManager.current
+    val configuration = LocalConfiguration.current
+    val isTv = configuration.screenWidthDp >= 840
 
     LaunchedEffect(uiState.isLoggedIn) {
         if (uiState.isLoggedIn) {
@@ -51,28 +54,29 @@ fun LoginScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
-                .padding(horizontal = 24.dp),
+                .padding(horizontal = if (isTv) 48.dp else 24.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Spacer(modifier = Modifier.height(80.dp))
+            // TV 模式下减少顶部间距
+            Spacer(modifier = Modifier.height(if (isTv) 24.dp else 80.dp))
             
             // Logo and Title
             Surface(
                 shape = RoundedCornerShape(32.dp),
                 color = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
-                modifier = Modifier.size(80.dp)
+                modifier = Modifier.size(if (isTv) 64.dp else 80.dp)
             ) {
                 Box(contentAlignment = Alignment.Center) {
                     Icon(
                         Icons.Default.Cloud,
                         contentDescription = null,
-                        modifier = Modifier.size(40.dp),
+                        modifier = Modifier.size(if (isTv) 32.dp else 40.dp),
                         tint = MaterialTheme.colorScheme.primary
                     )
                 }
             }
             
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(if (isTv) 16.dp else 24.dp))
             
             Text(
                 text = "HomeDrive",
@@ -80,7 +84,7 @@ fun LoginScreen(
                 color = MaterialTheme.colorScheme.onBackground
             )
             
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(if (isTv) 4.dp else 8.dp))
             
             Text(
                 text = "登录您的账户",
@@ -88,7 +92,7 @@ fun LoginScreen(
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
 
-            Spacer(modifier = Modifier.height(48.dp))
+            Spacer(modifier = Modifier.height(if (isTv) 24.dp else 48.dp))
 
             // Login Form Card
             Surface(
@@ -97,16 +101,17 @@ fun LoginScreen(
                 color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
             ) {
                 Column(
-                    modifier = Modifier.padding(24.dp),
+                    modifier = Modifier.padding(if (isTv) 16.dp else 24.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     // 服务器选择区域
                     ServerSelectionSection(
                         uiState = uiState,
-                        viewModel = viewModel
+                        viewModel = viewModel,
+                        isTv = isTv
                     )
 
-                    Spacer(modifier = Modifier.height(16.dp))
+                    Spacer(modifier = Modifier.height(if (isTv) 12.dp else 16.dp))
 
                     // Username Input
                     LoginTextField(
@@ -127,10 +132,11 @@ fun LoginScreen(
                         keyboardActions = KeyboardActions(
                             onNext = { focusManager.moveFocus(FocusDirection.Down) }
                         ),
-                        isError = uiState.error?.contains("用户名") == true
+                        isError = uiState.error?.contains("用户名") == true,
+                        isTv = isTv
                     )
 
-                    Spacer(modifier = Modifier.height(16.dp))
+                    Spacer(modifier = Modifier.height(if (isTv) 12.dp else 16.dp))
 
                     // Password Input
                     var passwordVisible by remember { mutableStateOf(false) }
@@ -173,12 +179,13 @@ fun LoginScreen(
                                 viewModel.login()
                             }
                         ),
-                        isError = uiState.error?.contains("密码") == true
+                        isError = uiState.error?.contains("密码") == true,
+                        isTv = isTv
                     )
 
                     // Error Message
                     uiState.error?.let { error ->
-                        Spacer(modifier = Modifier.height(16.dp))
+                        Spacer(modifier = Modifier.height(if (isTv) 12.dp else 16.dp))
                         Surface(
                             shape = RoundedCornerShape(16.dp),
                             color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.8f),
@@ -204,14 +211,14 @@ fun LoginScreen(
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(24.dp))
+                    Spacer(modifier = Modifier.height(if (isTv) 16.dp else 24.dp))
 
                     // Login Button
                     Button(
                         onClick = viewModel::login,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(52.dp),
+                            .height(if (isTv) 48.dp else 52.dp),
                         enabled = !uiState.isLoading,
                         shape = RoundedCornerShape(26.dp)
                     ) {
@@ -237,7 +244,8 @@ fun LoginScreen(
 @Composable
 private fun ServerSelectionSection(
     uiState: com.kingzcheung.homedrive.ui.viewmodel.LoginUiState,
-    viewModel: LoginViewModel
+    viewModel: LoginViewModel,
+    isTv: Boolean = false
 ) {
     var showDropdown by remember { mutableStateOf(false) }
     
@@ -250,7 +258,7 @@ private fun ServerSelectionSection(
                 color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
             ) {
                 Column(
-                    modifier = Modifier.padding(16.dp),
+                    modifier = Modifier.padding(if (isTv) 12.dp else 16.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Row(
@@ -269,14 +277,14 @@ private fun ServerSelectionSection(
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
-                    Spacer(modifier = Modifier.height(8.dp))
+                    Spacer(modifier = Modifier.height(if (isTv) 6.dp else 8.dp))
                     LinearProgressIndicator(
                         progress = { if (uiState.scanTotal > 0) uiState.scanProgress.toFloat() / uiState.scanTotal else 0f },
                         modifier = Modifier.fillMaxWidth(),
                         color = MaterialTheme.colorScheme.primary,
                         trackColor = MaterialTheme.colorScheme.surfaceVariant
                     )
-                    Spacer(modifier = Modifier.height(4.dp))
+                    Spacer(modifier = Modifier.height(if (isTv) 3.dp else 4.dp))
                     Text(
                         text = "${uiState.scanProgress}/${uiState.scanTotal}",
                         style = MaterialTheme.typography.bodySmall,
@@ -314,7 +322,8 @@ private fun ServerSelectionSection(
                         .menuAnchor()
                         .fillMaxWidth(),
                     enabled = false,
-                    isError = uiState.error?.contains("服务器") == true
+                    isError = uiState.error?.contains("服务器") == true,
+                    isTv = isTv
                 )
                 
                 ExposedDropdownMenu(
@@ -400,12 +409,13 @@ private fun ServerSelectionSection(
                     keyboardType = KeyboardType.Uri,
                     imeAction = ImeAction.Next
                 ),
-                isError = uiState.error?.contains("服务器") == true
+                isError = uiState.error?.contains("服务器") == true,
+                isTv = isTv
             )
             
             // 提示信息
             if (uiState.discoveredServers.isEmpty() && !uiState.isScanning) {
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(if (isTv) 6.dp else 8.dp))
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically
@@ -440,7 +450,8 @@ private fun LoginTextField(
     keyboardOptions: KeyboardOptions = KeyboardOptions.Default,
     keyboardActions: KeyboardActions = KeyboardActions.Default,
     isError: Boolean = false,
-    enabled: Boolean = true
+    enabled: Boolean = true,
+    isTv: Boolean = false
 ) {
     Surface(
         modifier = modifier.fillMaxWidth(),
@@ -456,7 +467,7 @@ private fun LoginTextField(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 20.dp, vertical = 14.dp),
+                .padding(horizontal = if (isTv) 16.dp else 20.dp, vertical = if (isTv) 12.dp else 14.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             CompositionLocalProvider(

@@ -22,6 +22,14 @@ import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.foundation.focusable
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -65,11 +73,19 @@ fun MediaViewerScreen(
     // 底部信息面板状态
     var showInfoSheet by remember { mutableStateOf(false) }
     
+    // 焦点请求器，用于接收按键事件
+    val focusRequester = remember { FocusRequester() }
+    
     // 释放视频播放器
     DisposableEffect(Unit) {
         onDispose {
             viewModel.releasePlayer()
         }
+    }
+    
+    // 请求焦点以接收按键事件
+    LaunchedEffect(Unit) {
+        focusRequester.requestFocus()
     }
 
     // 全屏查看器
@@ -77,6 +93,41 @@ fun MediaViewerScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(Color.Black)
+            .focusRequester(focusRequester)
+            .focusable()
+            .onKeyEvent { keyEvent ->
+                // 处理遥控器按键
+                if (keyEvent.type == KeyEventType.KeyDown) {
+                    when (keyEvent.key) {
+                        Key.DirectionLeft -> {
+                            // 向左切换到上一张
+                            if (pagerState.currentPage > 0) {
+                                scope.launch {
+                                    pagerState.animateScrollToPage(pagerState.currentPage - 1)
+                                }
+                            }
+                            true
+                        }
+                        Key.DirectionRight -> {
+                            // 向右切换到下一张
+                            if (pagerState.currentPage < files.size - 1) {
+                                scope.launch {
+                                    pagerState.animateScrollToPage(pagerState.currentPage + 1)
+                                }
+                            }
+                            true
+                        }
+                        Key.Back -> {
+                            // 返回键调用 onNavigateBack
+                            onNavigateBack()
+                            true
+                        }
+                        else -> false
+                    }
+                } else {
+                    false
+                }
+            }
     ) {
         // 图片/视频 Pager
         HorizontalPager(

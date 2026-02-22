@@ -2,6 +2,7 @@ package com.kingzcheung.homedrive.ui.screen
 
 import android.app.Activity
 import android.os.Build
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -118,6 +119,15 @@ fun HomeScreen(
         animationSpec = tween(durationMillis = 150),
         label = "statusBarAlpha"
     )
+    
+    // 获取当前导航栈状态
+    val navBackStackEntry by navController.currentBackStackEntryAsState()
+    val currentRoute = navBackStackEntry?.destination?.route
+    
+    // 处理返回键 - 如果不在起始页面，则返回上一页
+    BackHandler(enabled = currentRoute != Screen.Gallery.route) {
+        navController.popBackStack()
+    }
 
     Box(modifier = Modifier.fillMaxSize()) {
         Scaffold(
@@ -157,9 +167,12 @@ fun HomeScreen(
                     .fillMaxSize()
                     .padding(paddingValues)
             ) {
-                if (isTv) {
-                    Row(modifier = Modifier.fillMaxSize()) {
-                        NavigationRail {
+                Row(modifier = Modifier.fillMaxSize()) {
+                    // TV 模式下显示侧边导航栏
+                    if (isTv) {
+                        NavigationRail(
+                            modifier = Modifier.fillMaxHeight()
+                        ) {
                             Spacer(modifier = Modifier.weight(1f))
                             val navBackStackEntry by navController.currentBackStackEntryAsState()
                             val currentDestination = navBackStackEntry?.destination
@@ -183,13 +196,12 @@ fun HomeScreen(
                             Spacer(modifier = Modifier.weight(1f))
                         }
                     }
-                }
 
-                NavHost(
-                    navController = navController,
-                    startDestination = Screen.Gallery.route,
-                    modifier = Modifier.fillMaxSize()
-                ) {
+                    NavHost(
+                        navController = navController,
+                        startDestination = Screen.Gallery.route,
+                        modifier = Modifier.weight(1f).fillMaxHeight()
+                    ) {
                     composable(Screen.Gallery.route) {
                         GalleryScreen(
                             onNavigateToFolder = { /* Handle folder navigation */ },
@@ -245,13 +257,10 @@ fun HomeScreen(
                 }
             }
         }
-        
-        // 自定义顶部栏（包含状态栏和导航栏）
-        // 获取当前页面路由
-        val navBackStackEntry by navController.currentBackStackEntryAsState()
-        val currentRoute = navBackStackEntry?.destination?.route
-        
-        Column(
+    }
+    
+    // 自定义顶部栏（包含状态栏和导航栏）
+    Column(
             modifier = Modifier.fillMaxWidth()
         ) {
             // 状态栏背景（随滚动变化透明度）- 与导航栏同色
@@ -401,7 +410,7 @@ fun UploadDialog(
 }
 
 @Composable
-private fun getStringResource(id: Int): String {
+fun getStringResource(id: Int): String {
     return when (id) {
         R.string.gallery -> "图库"
         R.string.albums -> "图集"
@@ -416,7 +425,7 @@ private fun getStringResource(id: Int): String {
  * 悬浮式底部导航栏 - 紧凑文字样式
  */
 @Composable
-private fun FloatingBottomNavBar(
+fun FloatingBottomNavBar(
     items: List<Screen>,
     currentDestination: androidx.navigation.NavDestination?,
     onNavigate: (Screen) -> Unit
