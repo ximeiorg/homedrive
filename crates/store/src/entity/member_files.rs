@@ -15,6 +15,8 @@ pub struct Model {
     pub description: String,
     pub created_at: DateTimeUtc,
     pub updated_at: DateTimeUtc,
+    /// 软删除时间，Some 表示文件在回收站中
+    pub deleted_at: Option<DateTimeUtc>,
     #[sea_orm(
         belongs_to,
         from = "file_content_id",

@@ -1,3 +1,4 @@
+use chrono::Utc;
 use sea_orm::{
     ActiveModelTrait, ColumnTrait, DatabaseConnection, DeleteResult, EntityTrait, QueryFilter, Set,
 };
@@ -61,18 +62,89 @@ impl Mutation {
         active_model.update(db).await
     }
 
-    /// 删除成员文件记录
+    /// 删除成员文件记录（真删除）
     pub async fn delete(db: &DatabaseConnection, id: i64) -> Result<DeleteResult, sea_orm::DbErr> {
         member_files::Entity::delete_by_id(id).exec(db).await
     }
 
-    /// 批量删除成员文件记录
+    /// 批量删除成员文件记录（真删除）
     pub async fn delete_batch(
         db: &DatabaseConnection,
         ids: Vec<i64>,
     ) -> Result<DeleteResult, sea_orm::DbErr> {
         member_files::Entity::delete_many()
             .filter(member_files::Column::Id.is_in(ids))
+            .exec(db)
+            .await
+    }
+
+    /// 软删除：将文件移动到回收站
+    pub async fn soft_delete(
+        db: &DatabaseConnection,
+        id: i64,
+    ) -> Result<member_files::Model, sea_orm::DbErr> {
+        let member_file: Option<member_files::Model> =
+            member_files::Entity::find_by_id(id).one(db).await?;
+        let member_file = member_file
+            .ok_or_else(|| sea_orm::DbErr::Custom("Member file not found".to_string()))?;
+
+        let mut active_model: member_files::ActiveModel = member_file.into();
+        active_model.deleted_at = Set(Some(Utc::now()));
+        active_model.update(db).await
+    }
+
+    /// 批量软删除：将多个文件移动到回收站
+    pub async fn soft_delete_batch(
+        db: &DatabaseConnection,
+        ids: Vec<i64>,
+    ) -> Result<u64, sea_orm::DbErr> {
+        let now = Utc::now();
+        let result = member_files::Entity::update_many()
+            .filter(member_files::Column::Id.is_in(ids))
+            .filter(member_files::Column::DeletedAt.is_null()) // 只删除未删除的
+            .col_expr(member_files::Column::DeletedAt, sea_orm::sea_query::Expr::value(Some(now)))
+            .exec(db)
+            .await?;
+        Ok(result.rows_affected)
+    }
+
+    /// 从回收站恢复文件
+    pub async fn restore(
+        db: &DatabaseConnection,
+        id: i64,
+    ) -> Result<member_files::Model, sea_orm::DbErr> {
+        let member_file: Option<member_files::Model> =
+            member_files::Entity::find_by_id(id).one(db).await?;
+        let member_file = member_file
+            .ok_or_else(|| sea_orm::DbErr::Custom("Member file not found".to_string()))?;
+
+        let mut active_model: member_files::ActiveModel = member_file.into();
+        active_model.deleted_at = Set(None);
+        active_model.update(db).await
+    }
+
+    /// 批量恢复文件
+    pub async fn restore_batch(
+        db: &DatabaseConnection,
+        ids: Vec<i64>,
+    ) -> Result<u64, sea_orm::DbErr> {
+        let result = member_files::Entity::update_many()
+            .filter(member_files::Column::Id.is_in(ids))
+            .filter(member_files::Column::DeletedAt.is_not_null()) // 只恢复已删除的
+            .col_expr(member_files::Column::DeletedAt, sea_orm::sea_query::Expr::value(None::<chrono::DateTime<Utc>>))
+            .exec(db)
+            .await?;
+        Ok(result.rows_affected)
+    }
+
+    /// 清空回收站：永久删除用户的所有已删除文件
+    pub async fn empty_trash(
+        db: &DatabaseConnection,
+        member_id: i64,
+    ) -> Result<DeleteResult, sea_orm::DbErr> {
+        member_files::Entity::delete_many()
+            .filter(member_files::Column::MemberId.eq(member_id))
+            .filter(member_files::Column::DeletedAt.is_not_null())
             .exec(db)
             .await
     }

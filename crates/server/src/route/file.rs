@@ -4,7 +4,8 @@
 
 use crate::{
     handler::file::{
-        check_file_hash_exists, list_files, serve_file, sync_files, trigger_thumbnail_generation,
+        check_file_hash_exists, delete_files, empty_trash, list_files, list_trash,
+        permanent_delete_files, restore_files, serve_file, sync_files, trigger_thumbnail_generation,
         upload_file,
     },
     state::AppState,
@@ -12,7 +13,7 @@ use crate::{
 use axum::{
     Router,
     extract::DefaultBodyLimit,
-    routing::{get, post},
+    routing::{delete, get, post},
 };
 use std::sync::Arc;
 
@@ -29,6 +30,13 @@ pub fn file_router() -> Router<Arc<AppState>> {
         .route("/", get(list_files))
         .route("/sync", post(sync_files))
         .route("/thumbnail", post(trigger_thumbnail_generation))
+        // 回收站相关路由
+        .route("/trash", get(list_trash))
+        .route("/trash/empty", delete(empty_trash))
+        .route("/trash/restore", post(restore_files))
+        .route("/trash/delete", delete(permanent_delete_files))
+        // 文件删除（移动到回收站）
+        .route("/delete", delete(delete_files))
 }
 
 /// 创建静态文件路由

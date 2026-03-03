@@ -146,3 +146,70 @@ pub struct SyncFilesResponse {
 pub fn is_valid_sort_order(order: &str) -> bool {
     order == "asc" || order == "desc"
 }
+
+// ==================== 回收站相关数据结构 ====================
+
+/// 批量删除请求（移动到回收站）
+#[derive(Deserialize, Validate)]
+pub struct DeleteFilesRequest {
+    /// 要删除的文件 ID 列表
+    #[validate(length(min = 1, max = 100, message = "文件ID数量必须在1-100之间"))]
+    pub file_ids: Vec<i64>,
+}
+
+/// 批量删除响应
+#[derive(Serialize)]
+pub struct DeleteFilesResponse {
+    pub success: bool,
+    pub deleted_count: u64,
+    pub message: String,
+}
+
+/// 回收站文件列表项
+#[derive(Serialize)]
+pub struct TrashListItem {
+    pub id: i64,
+    pub file_name: String,
+    pub description: String,
+    pub file_size: Option<i64>,
+    pub mime_type: Option<String>,
+    pub thumbnail: Option<String>,
+    pub url: Option<String>,
+    pub created_at: String,
+    pub updated_at: String,
+    pub deleted_at: String, // 删除时间
+}
+
+/// 回收站文件列表响应
+#[derive(Serialize)]
+pub struct TrashListResponse {
+    pub files: Vec<TrashListItem>,
+    pub total: u64,
+    pub page: u64,
+    pub page_size: u64,
+    pub total_pages: u64,
+}
+
+/// 批量恢复请求
+#[derive(Deserialize, Validate)]
+pub struct RestoreFilesRequest {
+    /// 要恢复的文件 ID 列表
+    #[validate(length(min = 1, max = 100, message = "文件ID数量必须在1-100之间"))]
+    pub file_ids: Vec<i64>,
+}
+
+/// 批量恢复响应
+#[derive(Serialize)]
+pub struct RestoreFilesResponse {
+    pub success: bool,
+    pub restored_count: u64,
+    pub message: String,
+}
+
+/// 清空回收站响应
+#[derive(Serialize)]
+pub struct EmptyTrashResponse {
+    pub success: bool,
+    pub deleted_count: u64,
+    pub message: String,
+}

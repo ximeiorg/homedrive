@@ -554,3 +554,136 @@ export async function removeFilesFromAlbum(memberId: number, albumId: number, fi
   }
   return response.json();
 }
+
+// ==================== 回收站相关类型和 API ====================
+
+// 删除文件请求类型
+export interface DeleteFilesRequest {
+  file_ids: number[];
+}
+
+// 删除文件响应类型
+export interface DeleteFilesResponse {
+  success: boolean;
+  deleted_count: number;
+  message: string;
+}
+
+// 回收站文件项类型
+export interface TrashFileItem {
+  id: number;
+  file_name: string;
+  description: string;
+  file_size: number | null;
+  mime_type: string | null;
+  thumbnail: string | null;
+  url: string | null;
+  created_at: string;
+  updated_at: string;
+  deleted_at: string;
+}
+
+// 回收站列表响应类型
+export interface TrashListResponse {
+  files: TrashFileItem[];
+  total: number;
+  page: number;
+  page_size: number;
+  total_pages: number;
+}
+
+// 恢复文件请求类型
+export interface RestoreFilesRequest {
+  file_ids: number[];
+}
+
+// 恢复文件响应类型
+export interface RestoreFilesResponse {
+  success: boolean;
+  restored_count: number;
+  message: string;
+}
+
+// 清空回收站响应类型
+export interface EmptyTrashResponse {
+  success: boolean;
+  deleted_count: number;
+  message: string;
+}
+
+// 批量删除文件（移动到回收站）
+export async function deleteFiles(fileIds: number[]): Promise<DeleteFilesResponse> {
+  const response = await authFetch(`${FILES_API}/delete`, {
+    method: "DELETE",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ file_ids: fileIds }),
+  });
+  if (!response.ok) {
+    throw new Error("Failed to delete files");
+  }
+  return response.json();
+}
+
+// 获取回收站文件列表
+export async function getTrashList(params?: {
+  page?: number;
+  pageSize?: number;
+}): Promise<TrashListResponse> {
+  const searchParams = new URLSearchParams();
+  if (params?.page) {
+    searchParams.set("page", params.page.toString());
+  }
+  if (params?.pageSize) {
+    searchParams.set("page_size", params.pageSize.toString());
+  }
+  
+  const url = `${FILES_API}/trash${searchParams.toString() ? `?${searchParams.toString()}` : ""}`;
+  const response = await authFetch(url);
+  if (!response.ok) {
+    throw new Error("Failed to get trash list");
+  }
+  return response.json();
+}
+
+// 恢复文件
+export async function restoreFiles(fileIds: number[]): Promise<RestoreFilesResponse> {
+  const response = await authFetch(`${FILES_API}/trash/restore`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ file_ids: fileIds }),
+  });
+  if (!response.ok) {
+    throw new Error("Failed to restore files");
+  }
+  return response.json();
+}
+
+// 清空回收站
+export async function emptyTrash(): Promise<EmptyTrashResponse> {
+  const response = await authFetch(`${FILES_API}/trash/empty`, {
+    method: "DELETE",
+  });
+  if (!response.ok) {
+    throw new Error("Failed to empty trash");
+  }
+  return response.json();
+}
+
+// 永久删除文件
+export async function permanentDeleteFiles(fileIds: number[]): Promise<EmptyTrashResponse> {
+  const response = await authFetch(`${FILES_API}/trash/delete`, {
+    method: "DELETE",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ file_ids: fileIds }),
+  });
+  if (!response.ok) {
+    throw new Error("Failed to permanently delete files");
+  }
+  return response.json();
+}

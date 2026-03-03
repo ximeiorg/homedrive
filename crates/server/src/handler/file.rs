@@ -916,3 +916,273 @@ pub async fn trigger_thumbnail_generation(
         }
     }
 }
+
+/// 批量删除文件（移动到回收站）- 需要认证
+pub async fn delete_files(
+    State(state): State<Arc<AppState>>,
+    auth: Authorized,
+    ValidatedJson(req): ValidatedJson<schema::file::DeleteFilesRequest>,
+) -> crate::error::Result<Json<schema::file::DeleteFilesResponse>> {
+    let member_id = auth.user_id();
+    let db = &state.conn;
+
+    // 验证文件所有权
+    let files = store::member_file::query::Query::find_by_ids_and_member(db, req.file_ids.clone(), member_id)
+        .await
+        .map_err(|e| {
+            tracing::error!(error = ?e, user_id = member_id, "Failed to verify file ownership");
+            AppError::DatabaseError
+        })?;
+
+    if files.is_empty() {
+        return Ok(Json(schema::file::DeleteFilesResponse {
+            success: false,
+            deleted_count: 0,
+            message: "没有找到可删除的文件".to_string(),
+        }));
+    }
+
+    // 获取要删除的文件 ID（只删除未删除的）
+    let ids_to_delete: Vec<i64> = files
+        .iter()
+        .filter(|f| f.deleted_at.is_none())
+        .map(|f| f.id)
+        .collect();
+
+    if ids_to_delete.is_empty() {
+        return Ok(Json(schema::file::DeleteFilesResponse {
+            success: false,
+            deleted_count: 0,
+            message: "文件已在回收站中".to_string(),
+        }));
+    }
+
+    // 执行软删除
+    let deleted_count = store::member_file::mutation::Mutation::soft_delete_batch(db, ids_to_delete)
+        .await
+        .map_err(|e| {
+            tracing::error!(error = ?e, user_id = member_id, "Failed to soft delete files");
+            AppError::DatabaseError
+        })?;
+
+    tracing::info!(user_id = member_id, deleted_count = deleted_count, "Files moved to trash");
+
+    Ok(Json(schema::file::DeleteFilesResponse {
+        success: true,
+        deleted_count,
+        message: format!("已将 {} 个文件移动到回收站", deleted_count),
+    }))
+}
+
+/// 获取回收站文件列表 - 需要认证
+pub async fn list_trash(
+    State(state): State<Arc<AppState>>,
+    auth: Authorized,
+    ValidatedQuery(query): ValidatedQuery<schema::file::ListFilesQuery>,
+) -> crate::error::Result<Json<schema::file::TrashListResponse>> {
+    use schema::file::TrashListItem;
+
+    let member_id = auth.user_id();
+    let db = &state.conn;
+
+    let trash_query = store::member_file::query::ListTrashQuery {
+        page: query.page,
+        page_size: query.page_size,
+    };
+
+    let (results, total) = store::member_file::query::Query::list_trash_by_member(db, member_id, trash_query)
+        .await
+        .map_err(|e| {
+            tracing::error!(error = ?e, user_id = member_id, "Failed to list trash");
+            AppError::DatabaseError
+        })?;
+
+    let base_url = state.config.base_url.clone();
+
+    let files: Vec<TrashListItem> = results
+        .into_iter()
+        .filter_map(|(member_file, file_content)| {
+            // 从 file_content 获取信息
+            let (storage_path, mime_type, file_size, thumbnail) = match file_content {
+                Some(ref fc) => (
+                    fc.storage_path.clone(),
+                    Some(fc.mime_type.clone()),
+                    Some(fc.file_size),
+                    fc.thumbnail.clone(),
+                ),
+                None => return None,
+            };
+
+            // 构建文件访问 URL
+            let url = if storage_path.is_empty() {
+                None
+            } else {
+                Some(format!("{base_url}/api/static/{storage_path}"))
+            };
+
+            // 构建缩略图 URL
+            let thumbnail_url = thumbnail.and_then(|t| {
+                if t.is_empty() {
+                    None
+                } else {
+                    Some(format!("{base_url}/api/static/{t}"))
+                }
+            });
+
+            // deleted_at 必须存在（回收站中的文件）
+            let deleted_at = member_file.deleted_at?;
+
+            Some(TrashListItem {
+                id: member_file.id,
+                file_name: member_file.file_name,
+                description: member_file.description,
+                file_size,
+                mime_type,
+                thumbnail: thumbnail_url,
+                url,
+                created_at: schema::file::format_datetime_local(member_file.created_at),
+                updated_at: schema::file::format_datetime_local(member_file.updated_at),
+                deleted_at: schema::file::format_datetime_local(deleted_at),
+            })
+        })
+        .collect();
+
+    let page = query.page.unwrap_or(1);
+    let page_size = query.page_size.unwrap_or(100);
+    let total_pages = (total as f64 / page_size as f64).ceil() as u64;
+
+    Ok(Json(schema::file::TrashListResponse {
+        files,
+        total,
+        page,
+        page_size,
+        total_pages,
+    }))
+}
+
+/// 批量恢复文件 - 需要认证
+pub async fn restore_files(
+    State(state): State<Arc<AppState>>,
+    auth: Authorized,
+    ValidatedJson(req): ValidatedJson<schema::file::RestoreFilesRequest>,
+) -> crate::error::Result<Json<schema::file::RestoreFilesResponse>> {
+    let member_id = auth.user_id();
+    let db = &state.conn;
+
+    // 验证文件所有权
+    let files = store::member_file::query::Query::find_by_ids_and_member(db, req.file_ids.clone(), member_id)
+        .await
+        .map_err(|e| {
+            tracing::error!(error = ?e, user_id = member_id, "Failed to verify file ownership");
+            AppError::DatabaseError
+        })?;
+
+    // 获取要恢复的文件 ID（只恢复已删除的）
+    let ids_to_restore: Vec<i64> = files
+        .iter()
+        .filter(|f| f.deleted_at.is_some())
+        .map(|f| f.id)
+        .collect();
+
+    if ids_to_restore.is_empty() {
+        return Ok(Json(schema::file::RestoreFilesResponse {
+            success: false,
+            restored_count: 0,
+            message: "没有找到可恢复的文件".to_string(),
+        }));
+    }
+
+    // 执行恢复
+    let restored_count = store::member_file::mutation::Mutation::restore_batch(db, ids_to_restore)
+        .await
+        .map_err(|e| {
+            tracing::error!(error = ?e, user_id = member_id, "Failed to restore files");
+            AppError::DatabaseError
+        })?;
+
+    tracing::info!(user_id = member_id, restored_count = restored_count, "Files restored from trash");
+
+    Ok(Json(schema::file::RestoreFilesResponse {
+        success: true,
+        restored_count,
+        message: format!("已恢复 {} 个文件", restored_count),
+    }))
+}
+
+/// 清空回收站 - 需要认证
+pub async fn empty_trash(
+    State(state): State<Arc<AppState>>,
+    auth: Authorized,
+) -> crate::error::Result<Json<schema::file::EmptyTrashResponse>> {
+    let member_id = auth.user_id();
+    let db = &state.conn;
+
+    // 执行清空回收站（永久删除）
+    let result = store::member_file::mutation::Mutation::empty_trash(db, member_id)
+        .await
+        .map_err(|e| {
+            tracing::error!(error = ?e, user_id = member_id, "Failed to empty trash");
+            AppError::DatabaseError
+        })?;
+
+    let deleted_count = result.rows_affected;
+
+    tracing::info!(user_id = member_id, deleted_count = deleted_count, "Trash emptied");
+
+    Ok(Json(schema::file::EmptyTrashResponse {
+        success: true,
+        deleted_count,
+        message: format!("已永久删除 {} 个文件", deleted_count),
+    }))
+}
+
+/// 永久删除文件（从回收站彻底删除）- 需要认证
+pub async fn permanent_delete_files(
+    State(state): State<Arc<AppState>>,
+    auth: Authorized,
+    ValidatedJson(req): ValidatedJson<schema::file::DeleteFilesRequest>,
+) -> crate::error::Result<Json<schema::file::EmptyTrashResponse>> {
+    let member_id = auth.user_id();
+    let db = &state.conn;
+
+    // 验证文件所有权
+    let files = store::member_file::query::Query::find_by_ids_and_member(db, req.file_ids.clone(), member_id)
+        .await
+        .map_err(|e| {
+            tracing::error!(error = ?e, user_id = member_id, "Failed to verify file ownership");
+            AppError::DatabaseError
+        })?;
+
+    // 获取要永久删除的文件 ID（只删除已在回收站的）
+    let ids_to_delete: Vec<i64> = files
+        .iter()
+        .filter(|f| f.deleted_at.is_some())
+        .map(|f| f.id)
+        .collect();
+
+    if ids_to_delete.is_empty() {
+        return Ok(Json(schema::file::EmptyTrashResponse {
+            success: false,
+            deleted_count: 0,
+            message: "没有找到可永久删除的文件".to_string(),
+        }));
+    }
+
+    // 执行永久删除
+    let result = store::member_file::mutation::Mutation::delete_batch(db, ids_to_delete)
+        .await
+        .map_err(|e| {
+            tracing::error!(error = ?e, user_id = member_id, "Failed to permanently delete files");
+            AppError::DatabaseError
+        })?;
+
+    let deleted_count = result.rows_affected;
+
+    tracing::info!(user_id = member_id, deleted_count = deleted_count, "Files permanently deleted");
+
+    Ok(Json(schema::file::EmptyTrashResponse {
+        success: true,
+        deleted_count,
+        message: format!("已永久删除 {} 个文件", deleted_count),
+    }))
+}

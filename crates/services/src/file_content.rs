@@ -461,6 +461,7 @@ impl FileService {
             sort_order,
             file_type,
             search: params.search,
+            include_deleted: None,
         };
 
         store::member_file::query::Query::list_files_by_member(db, member_id, list_query)

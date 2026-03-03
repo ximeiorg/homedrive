@@ -13,6 +13,7 @@ pub enum SortField {
     CreatedAt,
     FileName,
     FileSize,
+    DeletedAt,
 }
 
 /// 排序方向
@@ -82,6 +83,17 @@ pub struct ListMemberFilesQuery {
     pub file_type: Option<FileTypeFilter>,
     /// 文件名搜索（模糊匹配）
     pub search: Option<String>,
+    /// 是否包含已删除文件（回收站）
+    pub include_deleted: Option<bool>,
+}
+
+/// 回收站查询参数
+#[derive(Debug, Default, Serialize, Deserialize)]
+pub struct ListTrashQuery {
+    /// 页码，从 1 开始
+    pub page: Option<u64>,
+    /// 每页大小，默认 100
+    pub page_size: Option<u64>,
 }
 
 pub struct Query;
@@ -95,13 +107,14 @@ impl Query {
         member_files::Entity::find_by_id(id).one(db).await
     }
 
-    /// 根据成员ID查询文件记录
+    /// 根据成员ID查询文件记录（排除已删除）
     pub async fn find_by_member_id(
         db: &DatabaseConnection,
         member_id: i64,
     ) -> Result<Vec<member_files::Model>, sea_orm::DbErr> {
         member_files::Entity::find()
             .filter(member_files::Column::MemberId.eq(member_id))
+            .filter(member_files::Column::DeletedAt.is_null())
             .all(db)
             .await
     }
@@ -171,6 +184,7 @@ impl Query {
         let count = member_files::Entity::find()
             .filter(member_files::Column::MemberId.eq(member_id))
             .filter(member_files::Column::FileContentId.eq(file_content_id))
+            .filter(member_files::Column::DeletedAt.is_null())
             .count(db)
             .await?;
 
@@ -186,11 +200,12 @@ impl Query {
         member_files::Entity::find()
             .filter(member_files::Column::MemberId.eq(member_id))
             .filter(member_files::Column::FileName.eq(file_name))
+            .filter(member_files::Column::DeletedAt.is_null())
             .one(db)
             .await
     }
 
-    /// 获取成员的最新文件
+    /// 获取成员的最新文件（排除已删除）
     pub async fn find_recent_files_by_member(
         db: &DatabaseConnection,
         member_id: i64,
@@ -198,6 +213,7 @@ impl Query {
     ) -> Result<Vec<member_files::Model>, sea_orm::DbErr> {
         member_files::Entity::find()
             .filter(member_files::Column::MemberId.eq(member_id))
+            .filter(member_files::Column::DeletedAt.is_null())
             .order_by_desc(member_files::Column::CreatedAt)
             .limit(limit)
             .all(db)
@@ -211,6 +227,7 @@ impl Query {
     ) -> Result<Vec<member_files::Model>, sea_orm::DbErr> {
         member_files::Entity::find()
             .filter(member_files::Column::Description.like(format!("%{keyword}%")))
+            .filter(member_files::Column::DeletedAt.is_null())
             .all(db)
             .await
     }
@@ -236,6 +253,11 @@ impl Query {
         // 构建基础查询
         let mut select =
             member_files::Entity::find().filter(member_files::Column::MemberId.eq(member_id));
+
+        // 默认排除已删除文件，除非明确要求包含
+        if query.include_deleted != Some(true) {
+            select = select.filter(member_files::Column::DeletedAt.is_null());
+        }
 
         // 应用文件类型过滤
         if let Some(ref file_type) = query.file_type {
@@ -279,6 +301,10 @@ impl Query {
                 SortOrder::Asc => select = select.order_by_asc(member_files::Column::CreatedAt),
                 SortOrder::Desc => select = select.order_by_desc(member_files::Column::CreatedAt),
             },
+            SortField::DeletedAt => match sort_order {
+                SortOrder::Asc => select = select.order_by_asc(member_files::Column::DeletedAt),
+                SortOrder::Desc => select = select.order_by_desc(member_files::Column::DeletedAt),
+            },
         }
 
         // 获取总数
@@ -299,5 +325,59 @@ impl Query {
         }
 
         Ok((results_with_content, total))
+    }
+
+    /// 列出回收站文件（已删除文件）
+    pub async fn list_trash_by_member(
+        db: &DatabaseConnection,
+        member_id: i64,
+        query: ListTrashQuery,
+    ) -> Result<
+        (
+            Vec<(member_files::Model, Option<file_contents::Model>)>,
+            u64,
+        ),
+        sea_orm::DbErr,
+    > {
+        let page = query.page.unwrap_or(1);
+        let page_size = query.page_size.unwrap_or(100);
+
+        // 构建查询：只查询已删除文件
+        let select = member_files::Entity::find()
+            .filter(member_files::Column::MemberId.eq(member_id))
+            .filter(member_files::Column::DeletedAt.is_not_null())
+            .order_by_desc(member_files::Column::DeletedAt);
+
+        // 获取总数
+        let total = select.clone().count(db).await?;
+
+        // 分页查询
+        let paginator = select.paginate(db, page_size);
+        let results = paginator.fetch_page(page - 1).await?;
+
+        // 加载关联的 file_contents 信息
+        let mut results_with_content = Vec::new();
+        for member_file in results {
+            let file_content = member_file
+                .find_related(file_contents::Entity)
+                .one(db)
+                .await?;
+            results_with_content.push((member_file, file_content));
+        }
+
+        Ok((results_with_content, total))
+    }
+
+    /// 根据ID列表查询成员文件记录（验证所有权）
+    pub async fn find_by_ids_and_member(
+        db: &DatabaseConnection,
+        ids: Vec<i64>,
+        member_id: i64,
+    ) -> Result<Vec<member_files::Model>, sea_orm::DbErr> {
+        member_files::Entity::find()
+            .filter(member_files::Column::Id.is_in(ids))
+            .filter(member_files::Column::MemberId.eq(member_id))
+            .all(db)
+            .await
     }
 }

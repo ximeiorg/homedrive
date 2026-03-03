@@ -8,6 +8,7 @@ mod m20260208_090000_add_thumbnail;
 mod m20260211_063853_album;
 mod m20260211_064048_album_files;
 mod m20260214_000001_add_member_role;
+mod m20260303_000001_add_deleted_at;
 
 pub struct Migrator;
 
@@ -23,6 +24,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20260211_063853_album::Migration),
             Box::new(m20260211_064048_album_files::Migration),
             Box::new(m20260214_000001_add_member_role::Migration),
+            Box::new(m20260303_000001_add_deleted_at::Migration),
         ]
     }
 }
